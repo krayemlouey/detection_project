@@ -1,3 +1,32 @@
+# Vision par ordinateur
 opencv-python==4.8.1.78
 numpy==1.24.3
+
+# Client HTTP pour l'API
 requests==2.31.0
+
+# Gestion des dates et temps
+python-dateutil==2.8.2
+
+# Interface en ligne de commande
+argparse
+
+# Support des formats d'images additionnels
+Pillow==10.0.1
+
+# Utilitaires
+urllib3==2.0.7
+certifi==2023.7.22
+charset-normalizer==3.3.2
+idna==3.4
+
+# Développement et tests (optionnel)
+pytest==7.4.3
+pytest-cov==4.1.0
+
+# Performance monitoring (optionnel)
+psutil==5.9.6
+
+# Configuration avancée (optionnel)
+pyyaml==6.0.1
+configparser

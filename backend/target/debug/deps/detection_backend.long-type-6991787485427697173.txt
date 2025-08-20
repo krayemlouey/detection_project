@@ -1,0 +1,2 @@
+fn(State<AppState>, Query<DateRangeQuery>, Query<FilterQuery>, HeaderMap) -> impl Future<Output = Result<axum::Json<ApiResponse<Vec<Detection>>>, (axum::http::StatusCode, axum::Json<ApiResponse<Vec<Detection>>>)>> {get_detections}
+fn(State<AppState>, Query<DateRangeQuery>, Query<FilterQuery>, HeaderMap) -> impl Future<Output = Result<axum::Json<ApiResponse<Vec<Detection>>>, (axum::http::StatusCode, axum::Json<ApiResponse<Vec<Detection>>>)>> {get_detections}: Handler<_, _>

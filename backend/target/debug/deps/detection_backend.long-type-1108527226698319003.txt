@@ -1,0 +1,2 @@
+fn(State<AppState>, axum::Json<{type error}>) -> impl Future<Output = Result<axum::Json<ApiResponse<Detection>>, (axum::http::StatusCode, axum::Json<ApiResponse<Detection>>)>> {add_detection}
+fn(State<AppState>, axum::Json<{type error}>) -> impl Future<Output = Result<axum::Json<ApiResponse<Detection>>, (axum::http::StatusCode, axum::Json<ApiResponse<Detection>>)>> {add_detection}: Handler<_, _>

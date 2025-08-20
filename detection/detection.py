@@ -1,264 +1,283 @@
+#!/usr/bin/env python3
+"""
+Système de détection d'objets par couleur en temps réel
+Intégré avec l'API backend Rust pour le stockage des détections
+"""
+
 import cv2
 import numpy as np
 import requests
 import json
 import time
+import threading
 from datetime import datetime
-import base64
+import argparse
+import sys
 import os
 
-class ColorObjectDetector:
-    def __init__(self):
+# Configuration de l'API
+API_BASE_URL = "http://localhost:3000/api"
+API_ENDPOINT = f"{API_BASE_URL}/detections"
+
+# Configuration des couleurs HSV (Hue, Saturation, Value)
+COLORS = {
+    'red': {
+        'ranges': [
+            (np.array([0, 120, 70]), np.array([10, 255, 255])),    # Rouge bas
+            (np.array([170, 120, 70]), np.array([180, 255, 255]))  # Rouge haut
+        ],
+        'object_type': 'Carte microchip',
+        'display_color': (0, 0, 255)  # BGR pour OpenCV
+    },
+    'green': {
+        'ranges': [
+            (np.array([36, 50, 70]), np.array([89, 255, 255]))
+        ],
+        'object_type': 'Carte personnalisée',
+        'display_color': (0, 255, 0)
+    },
+    'blue': {
+        'ranges': [
+            (np.array([90, 50, 70]), np.array([128, 255, 255]))
+        ],
+        'object_type': 'STM32',
+        'display_color': (255, 0, 0)
+    }
+}
+
+class DetectionSystem:
+    def __init__(self, camera_index=0, api_url=API_ENDPOINT):
+        self.camera_index = camera_index
+        self.api_url = api_url
         self.cap = None
         self.running = False
-        
-        # Configuration des couleurs HSV (améliorée)
-        self.colors = {
-            'red': [
-                (0, 120, 70), (10, 255, 255),      # Rouge bas
-                (170, 120, 70), (180, 255, 255)    # Rouge haut
-            ],
-            'green': [(35, 50, 50), (85, 255, 255)],    # Vert
-            'blue': [(90, 50, 50), (130, 255, 255)]     # Bleu
-        }
-        
-        # Mapping des couleurs vers les types d'objets
-        self.color_to_type = {
-            'red': 'Carte microchip',
-            'green': 'Carte personnalisée', 
-            'blue': 'STM32'
-        }
-        
-        # Configuration
-        self.min_area = 500  # Surface minimum pour détection
-        self.api_url = "http://localhost:3000/api/detections"
-        self.detection_cooldown = {}  # Pour éviter les détections en double
-        self.cooldown_time = 3.0  # 3 secondes entre détections
+        self.detection_enabled = True
+        self.detection_interval = 1.0  # Secondes entre détections
+        self.last_detection_time = 0
         
         # Compteurs
-        self.frame_count = 0
-        self.detection_count = {'red': 0, 'green': 0, 'blue': 0}
+        self.counters = {color: 0 for color in COLORS.keys()}
+        self.total_detections = 0
+        self.session_start = datetime.now()
         
-        # Dossier pour sauvegarder les captures
-        self.captures_dir = "captures"
-        if not os.path.exists(self.captures_dir):
-            os.makedirs(self.captures_dir)
-    
-    def initialize_camera(self):
-        """Initialise la caméra"""
+        # Configuration de la capture
+        self.frame_width = 640
+        self.frame_height = 480
+        self.detection_area_size = 20  # Taille des blocs de détection
+        
+        # Historique des détections récentes (pour éviter les doublons)
+        self.recent_detections = {}
+        self.detection_cooldown = 2.0  # Secondes avant de pouvoir re-détecter le même objet
+
+    def init_camera(self):
+        """Initialiser la caméra"""
         try:
-            # Essayer différents indices de caméra
-            for i in range(3):
-                self.cap = cv2.VideoCapture(i)
-                if self.cap.isOpened():
-                    print(f"✅ Caméra {i} connectée avec succès")
-                    # Configuration de la caméra
-                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                    self.cap.set(cv2.CAP_PROP_FPS, 30)
-                    return True
+            self.cap = cv2.VideoCapture(self.camera_index)
+            if not self.cap.isOpened():
+                print(f"❌ Impossible d'ouvrir la caméra {self.camera_index}")
+                return False
             
-            print("❌ Aucune caméra trouvée")
-            return False
+            # Configuration de la caméra
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
             
+            print(f"✅ Caméra initialisée: {self.frame_width}x{self.frame_height}")
+            return True
         except Exception as e:
-            print(f"❌ Erreur d'initialisation caméra: {e}")
+            print(f"❌ Erreur lors de l'initialisation de la caméra: {e}")
             return False
-    
+
+    def send_detection_to_api(self, color, object_type):
+        """Envoyer une détection à l'API backend"""
+        try:
+            timestamp = int(time.time())
+            g_id = f"{color.upper()}_{object_type.replace(' ', '_').upper()}_{timestamp}"
+            
+            payload = {
+                "g_id": g_id,
+                "object_type": object_type,
+                "color": color
+            }
+            
+            response = requests.post(
+                self.api_url,
+                json=payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    detection_data = data.get('data', {})
+                    ref_count = detection_data.get('ref_count', 1)
+                    print(f"✅ API: {color} {object_type} enregistré (ref: {ref_count})")
+                    return True
+                else:
+                    print(f"⚠️ API: {data.get('message', 'Erreur inconnue')}")
+            else:
+                print(f"❌ API HTTP {response.status_code}: {response.text}")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"🌐 Erreur de connexion API: {e}")
+        except Exception as e:
+            print(f"❌ Erreur lors de l'envoi à l'API: {e}")
+        
+        return False
+
     def detect_color_objects(self, frame):
-        """Détecte les objets colorés dans le frame"""
+        """Détecter les objets colorés dans l'image"""
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         detections = []
         
-        # Convertir en HSV
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        
-        # Appliquer un flou pour réduire le bruit
-        hsv = cv2.GaussianBlur(hsv, (5, 5), 0)
-        
-        for color_name, ranges in self.colors.items():
-            mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+        for color_name, color_config in COLORS.items():
+            # Créer un masque combiné pour toutes les plages de couleur
+            combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
             
-            # Gérer les plages multiples (comme pour le rouge)
-            if len(ranges) == 4:  # Rouge avec deux plages
-                mask1 = cv2.inRange(hsv, ranges[0], ranges[1])
-                mask2 = cv2.inRange(hsv, ranges[2], ranges[3])
-                mask = cv2.bitwise_or(mask1, mask2)
-            else:
-                mask = cv2.inRange(hsv, ranges[0], ranges[1])
+            for lower, upper in color_config['ranges']:
+                mask = cv2.inRange(hsv, lower, upper)
+                combined_mask = cv2.bitwise_or(combined_mask, mask)
             
-            # Opérations morphologiques pour nettoyer le masque
+            # Nettoyer le masque avec des opérations morphologiques
             kernel = np.ones((5, 5), np.uint8)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
+            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
             
             # Trouver les contours
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             for contour in contours:
                 area = cv2.contourArea(contour)
-                
-                if area > self.min_area:
-                    # Calculer le centre et les dimensions
-                    M = cv2.moments(contour)
-                    if M["m00"] != 0:
-                        cx = int(M["m10"] / M["m00"])
-                        cy = int(M["m01"] / M["m00"])
+                if area > 500:  # Filtrer les petits objets
+                    # Calculer le rectangle englobant
+                    x, y, w, h = cv2.boundingRect(contour)
+                    
+                    # Vérifier si on a déjà détecté cet objet récemment
+                    detection_key = f"{color_name}_{x//50}_{y//50}"  # Grille grossière
+                    current_time = time.time()
+                    
+                    if (detection_key not in self.recent_detections or 
+                        current_time - self.recent_detections[detection_key] > self.detection_cooldown):
                         
-                        # Rectangle englobant
-                        x, y, w, h = cv2.boundingRect(contour)
-                        
-                        # Calculer le ratio et la solidité pour filtrer
-                        aspect_ratio = w / float(h)
-                        hull = cv2.convexHull(contour)
-                        hull_area = cv2.contourArea(hull)
-                        solidity = area / hull_area if hull_area > 0 else 0
-                        
-                        detection = {
+                        detections.append({
                             'color': color_name,
-                            'type': self.color_to_type[color_name],
-                            'center': (cx, cy),
+                            'object_type': color_config['object_type'],
                             'bbox': (x, y, w, h),
                             'area': area,
-                            'aspect_ratio': aspect_ratio,
-                            'solidity': solidity,
-                            'contour': contour
-                        }
+                            'display_color': color_config['display_color']
+                        })
                         
-                        detections.append(detection)
+                        self.recent_detections[detection_key] = current_time
         
         return detections
-    
-    def draw_detections(self, frame, detections):
-        """Dessine les détections sur le frame"""
-        for detection in detections:
-            color = detection['color']
-            x, y, w, h = detection['bbox']
-            cx, cy = detection['center']
-            
-            # Couleur pour le dessin
-            draw_color = {
-                'red': (0, 0, 255),
-                'green': (0, 255, 0),
-                'blue': (255, 0, 0)
-            }[color]
-            
-            # Dessiner le contour
-            cv2.drawContours(frame, [detection['contour']], -1, draw_color, 2)
-            
-            # Dessiner le rectangle
-            cv2.rectangle(frame, (x, y), (x + w, y + h), draw_color, 2)
-            
-            # Dessiner le centre
-            cv2.circle(frame, (cx, cy), 5, draw_color, -1)
-            
-            # Ajouter le texte
-            text = f"{detection['type']} ({color.upper()})"
-            cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, draw_color, 2)
-            
-            # Informations supplémentaires
-            info_text = f"Area: {int(detection['area'])}"
-            cv2.putText(frame, info_text, (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, draw_color, 1)
-    
-    def save_detection_image(self, frame, detection):
-        """Sauvegarde l'image de la détection"""
-        timestamp = int(time.time())
-        filename = f"capture_{detection['color']}_{timestamp}.jpg"
-        filepath = os.path.join(self.captures_dir, filename)
-        
-        # Extraire la région d'intérêt
-        x, y, w, h = detection['bbox']
-        # Ajouter une marge
-        margin = 20
-        x1 = max(0, x - margin)
-        y1 = max(0, y - margin)
-        x2 = min(frame.shape[1], x + w + margin)
-        y2 = min(frame.shape[0], y + h + margin)
-        
-        roi = frame[y1:y2, x1:x2]
-        
-        success = cv2.imwrite(filepath, roi)
-        if success:
-            print(f"📸 Image sauvegardée: {filename}")
-            return filename
-        return None
-    
-    def send_to_api(self, detection, image_filename=None):
-        """Envoie la détection à l'API"""
-        timestamp = datetime.now().isoformat()
-        
-        data = {
-            "g_id": f"{detection['color'].upper()}_{detection['type'].replace(' ', '_')}_{int(time.time())}",
-            "object_type": detection['type'],
-            "color": detection['color'],
-            "datetime": timestamp,
-            "area": int(detection['area']),
-            "center_x": detection['center'][0],
-            "center_y": detection['center'][1],
-            "image_filename": image_filename
-        }
-        
-        try:
-            response = requests.post(self.api_url, 
-                                   json=data, 
-                                   timeout=5,
-                                   headers={'Content-Type': 'application/json'})
-            
-            if response.status_code == 200:
-                print(f"✅ Détection envoyée: {detection['type']} ({detection['color']})")
-                return True
-            else:
-                print(f"❌ Erreur API ({response.status_code}): {response.text}")
-                return False
-                
-        except requests.RequestException as e:
-            print(f"❌ Erreur de connexion API: {e}")
-            return False
-    
-    def is_duplicate_detection(self, detection):
-        """Vérifie si c'est une détection en double"""
-        color = detection['color']
+
+    def process_detections(self, detections):
+        """Traiter les détections trouvées"""
         current_time = time.time()
         
-        # Vérifier le cooldown
-        if color in self.detection_cooldown:
-            if current_time - self.detection_cooldown[color] < self.cooldown_time:
-                return True
+        for detection in detections:
+            color = detection['color']
+            object_type = detection['object_type']
+            
+            # Mettre à jour les compteurs
+            self.counters[color] += 1
+            self.total_detections += 1
+            
+            # Envoyer à l'API si activé
+            if self.detection_enabled:
+                threading.Thread(
+                    target=self.send_detection_to_api,
+                    args=(color, object_type),
+                    daemon=True
+                ).start()
+            
+            print(f"🔍 Détecté: {color} {object_type} (Total: {self.total_detections})")
+
+    def draw_detections(self, frame, detections):
+        """Dessiner les détections sur l'image"""
+        for detection in detections:
+            x, y, w, h = detection['bbox']
+            color = detection['display_color']
+            
+            # Rectangle de détection
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            
+            # Label
+            label = f"{detection['color']} {detection['object_type']}"
+            label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+            
+            # Background du label
+            cv2.rectangle(frame, (x, y - label_size[1] - 10), 
+                         (x + label_size[0], y), color, -1)
+            
+            # Texte du label
+            cv2.putText(frame, label, (x, y - 5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+    def draw_ui(self, frame):
+        """Dessiner l'interface utilisateur sur l'image"""
+        h, w = frame.shape[:2]
         
-        # Mettre à jour le timestamp
-        self.detection_cooldown[color] = current_time
-        return False
-    
-    def display_stats(self, frame):
-        """Affiche les statistiques sur le frame"""
-        # Background pour les stats
+        # Zone d'informations (fond semi-transparent)
         overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (300, 120), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (0, 0), (w, 120), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
         
-        # Texte des statistiques
-        stats_text = [
-            f"Frame: {self.frame_count}",
-            f"Rouge: {self.detection_count['red']}",
-            f"Vert: {self.detection_count['green']}",
-            f"Bleu: {self.detection_count['blue']}",
-            f"Total: {sum(self.detection_count.values())}"
-        ]
+        # Titre
+        cv2.putText(frame, "Systeme de Detection IoT", (10, 25), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
         
-        for i, text in enumerate(stats_text):
-            cv2.putText(frame, text, (20, 35 + i * 20), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-    
+        # Compteurs
+        y_pos = 50
+        for i, (color, count) in enumerate(self.counters.items()):
+            color_info = COLORS[color]
+            text = f"{color.upper()}: {count} ({color_info['object_type']})"
+            cv2.putText(frame, text, (10, y_pos + i * 20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_info['display_color'], 1)
+        
+        # Informations de session
+        session_duration = datetime.now() - self.session_start
+        duration_str = str(session_duration).split('.')[0]  # Enlever les microsecondes
+        
+        info_text = f"Total: {self.total_detections} | Duree: {duration_str}"
+        cv2.putText(frame, info_text, (w - 300, 25), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # État de détection
+        status = "ACTIF" if self.detection_enabled else "PAUSE"
+        status_color = (0, 255, 0) if self.detection_enabled else (0, 255, 255)
+        cv2.putText(frame, f"Detection: {status}", (w - 150, 45), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, status_color, 1)
+        
+        # Aide (contrôles)
+        help_text = "S:Start Q:Quit C:Capture R:Reset"
+        cv2.putText(frame, help_text, (10, h - 10), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+
+    def reset_counters(self):
+        """Remettre à zéro tous les compteurs"""
+        self.counters = {color: 0 for color in COLORS.keys()}
+        self.total_detections = 0
+        self.session_start = datetime.now()
+        self.recent_detections.clear()
+        print("🔄 Compteurs remis à zéro")
+
+    def save_screenshot(self, frame):
+        """Sauvegarder une capture d'écran"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"detection_capture_{timestamp}.jpg"
+        cv2.imwrite(filename, frame)
+        print(f"📸 Capture sauvegardée: {filename}")
+
     def run(self):
-        """Lance la détection en temps réel"""
-        if not self.initialize_camera():
-            return
+        """Boucle principale de détection"""
+        if not self.init_camera():
+            return False
         
-        print("🎯 Détection démarrée - Appuyez sur 'q' pour quitter")
-        print("📋 Commandes:")
-        print("  's' - Sauvegarder le frame actuel")
-        print("  'r' - Reset des compteurs")
-        print("  'c' - Capturer et sauvegarder toutes les détections")
-        print("  'q' - Quitter")
+        print("🚀 Système de détection démarré")
+        print("Contrôles: S=Start/Pause, Q=Quitter, C=Capturer, R=Reset")
+        print("-" * 50)
         
         self.running = True
         
@@ -266,145 +285,255 @@ class ColorObjectDetector:
             while self.running:
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("❌ Impossible de lire le frame de la caméra")
+                    print("❌ Impossible de lire l'image de la caméra")
                     break
                 
-                self.frame_count += 1
+                # Traitement des détections
+                current_time = time.time()
+                if (self.detection_enabled and 
+                    current_time - self.last_detection_time > self.detection_interval):
+                    
+                    detections = self.detect_color_objects(frame)
+                    if detections:
+                        self.process_detections(detections)
+                        self.draw_detections(frame, detections)
+                    
+                    self.last_detection_time = current_time
                 
-                # Détection des objets
-                detections = self.detect_color_objects(frame)
+                # Interface utilisateur
+                self.draw_ui(frame)
                 
-                # Traiter chaque détection
-                for detection in detections:
-                    if not self.is_duplicate_detection(detection):
-                        self.detection_count[detection['color']] += 1
-                        
-                        # Sauvegarder l'image automatiquement lors d'une détection
-                        image_filename = self.save_detection_image(frame, detection)
-                        
-                        # Envoyer à l'API
-                        self.send_to_api(detection, image_filename)
-                
-                # Dessiner les détections
-                self.draw_detections(frame, detections)
-                
-                # Afficher les statistiques
-                self.display_stats(frame)
-                
-                # Afficher le frame
-                cv2.imshow('Détection d\'Objets Colorés', frame)
+                # Afficher l'image
+                cv2.imshow('Detection System', frame)
                 
                 # Gestion des touches
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    self.running = False
-                elif key == ord('s'):
-                    self.save_current_frame(frame)
-                elif key == ord('r'):
+                
+                if key == ord('q') or key == 27:  # Q ou Escape
+                    print("👋 Arrêt du système...")
+                    break
+                elif key == ord('s'):  # Start/Stop
+                    self.detection_enabled = not self.detection_enabled
+                    status = "activée" if self.detection_enabled else "désactivée"
+                    print(f"🔄 Détection {status}")
+                elif key == ord('c'):  # Capture
+                    self.save_screenshot(frame)
+                elif key == ord('r'):  # Reset
                     self.reset_counters()
-                elif key == ord('c'):
-                    self.capture_all_detections(frame, detections)
-        
+                elif key == ord('h'):  # Help
+                    self.print_help()
+                
         except KeyboardInterrupt:
-            print("\n⏹️ Arrêt demandé par l'utilisateur")
-        
+            print("\n⚠️ Interruption clavier détectée")
+        except Exception as e:
+            print(f"❌ Erreur durant l'exécution: {e}")
         finally:
             self.cleanup()
-    
-    def save_current_frame(self, frame):
-        """Sauvegarde le frame actuel"""
-        timestamp = int(time.time())
-        filename = f"frame_{timestamp}.jpg"
-        filepath = os.path.join(self.captures_dir, filename)
         
-        success = cv2.imwrite(filepath, frame)
-        if success:
-            print(f"📸 Frame sauvegardé: {filename}")
-        else:
-            print("❌ Erreur lors de la sauvegarde")
-    
-    def reset_counters(self):
-        """Remet les compteurs à zéro"""
-        self.detection_count = {'red': 0, 'green': 0, 'blue': 0}
-        self.frame_count = 0
-        self.detection_cooldown = {}
-        print("🔄 Compteurs remis à zéro")
-    
-    def capture_all_detections(self, frame, detections):
-        """Capture toutes les détections actuelles"""
-        if not detections:
-            print("ℹ️ Aucune détection à capturer")
-            return
-        
-        for i, detection in enumerate(detections):
-            image_filename = self.save_detection_image(frame, detection)
-            if image_filename:
-                self.send_to_api(detection, image_filename)
-        
-        print(f"📸 {len(detections)} détection(s) capturée(s)")
-    
+        return True
+
     def cleanup(self):
-        """Nettoie les ressources"""
+        """Nettoyer les ressources"""
+        self.running = False
         if self.cap:
             self.cap.release()
         cv2.destroyAllWindows()
-        print("🧹 Ressources nettoyées")
-    
-    def test_colors(self):
-        """Mode test pour calibrer les couleurs"""
-        if not self.initialize_camera():
-            return
         
-        print("🔧 Mode test de couleurs - Appuyez sur 'q' pour quitter")
+        # Afficher le résumé de la session
+        print("\n" + "="*50)
+        print("📊 RESUME DE LA SESSION")
+        print("="*50)
+        session_duration = datetime.now() - self.session_start
+        print(f"Durée: {session_duration}")
+        print(f"Total détections: {self.total_detections}")
         
-        while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-            
-            # Convertir en HSV
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            
-            # Afficher les valeurs HSV au centre
-            h, w = frame.shape[:2]
-            center_hsv = hsv[h//2, w//2]
-            
-            # Dessiner le point central
-            cv2.circle(frame, (w//2, h//2), 10, (0, 255, 0), 2)
-            cv2.putText(frame, f"HSV: {center_hsv}", (20, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            # Tester chaque couleur
-            for i, (color_name, ranges) in enumerate(self.colors.items()):
-                mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
-                
-                if len(ranges) == 4:  # Rouge
-                    mask1 = cv2.inRange(hsv, ranges[0], ranges[1])
-                    mask2 = cv2.inRange(hsv, ranges[2], ranges[3])
-                    mask = cv2.bitwise_or(mask1, mask2)
-                else:
-                    mask = cv2.inRange(hsv, ranges[0], ranges[1])
-                
-                # Afficher le masque dans une petite fenêtre
-                small_mask = cv2.resize(mask, (150, 100))
-                cv2.imshow(f'Masque {color_name}', small_mask)
-            
-            cv2.imshow('Test Couleurs', frame)
-            
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        for color, count in self.counters.items():
+            if count > 0:
+                print(f"  {color.upper()}: {count} ({COLORS[color]['object_type']})")
+        print("="*50)
+
+    def print_help(self):
+        """Afficher l'aide"""
+        print("\n" + "="*40)
+        print("🆘 AIDE - CONTROLES")
+        print("="*40)
+        print("S : Activer/Désactiver la détection")
+        print("Q : Quitter le programme")
+        print("C : Capturer une image")
+        print("R : Remettre à zéro les compteurs")
+        print("H : Afficher cette aide")
+        print("ESC : Quitter")
+        print("="*40)
+
+    def test_api_connection(self):
+        """Tester la connexion à l'API"""
+        try:
+            health_url = f"{API_BASE_URL}/health"
+            response = requests.get(health_url, timeout=5)
+            if response.status_code == 200:
+                print("✅ API backend accessible")
+                return True
+            else:
+                print(f"⚠️ API répond avec le code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"❌ API backend inaccessible: {e}")
+            print("💡 Assurez-vous que le serveur Rust est démarré (cargo run)")
         
-        self.cleanup()
+        return False
+
+    def adjust_detection_sensitivity(self, sensitivity_level):
+        """Ajuster la sensibilité de détection"""
+        if sensitivity_level == "low":
+            self.detection_interval = 2.0
+            self.detection_cooldown = 3.0
+        elif sensitivity_level == "medium":
+            self.detection_interval = 1.0
+            self.detection_cooldown = 2.0
+        elif sensitivity_level == "high":
+            self.detection_interval = 0.5
+            self.detection_cooldown = 1.0
+        
+        print(f"🎛️ Sensibilité réglée sur: {sensitivity_level}")
 
 def main():
     """Fonction principale"""
-    detector = ColorObjectDetector()
+    parser = argparse.ArgumentParser(description='Système de détection d\'objets par couleur')
+    parser.add_argument('--camera', '-c', type=int, default=0, 
+                       help='Index de la caméra (défaut: 0)')
+    parser.add_argument('--api-url', '-a', type=str, default=API_ENDPOINT,
+                       help=f'URL de l\'API (défaut: {API_ENDPOINT})')
+    parser.add_argument('--sensitivity', '-s', choices=['low', 'medium', 'high'], 
+                       default='medium', help='Niveau de sensibilité (défaut: medium)')
+    parser.add_argument('--no-api', action='store_true', 
+                       help='Désactiver l\'envoi vers l\'API')
+    parser.add_argument('--test-api', action='store_true',
+                       help='Tester la connexion à l\'API et quitter')
     
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == '--test':
-        detector.test_colors()
+    args = parser.parse_args()
+    
+    # Affichage de démarrage
+    print("🎯 SYSTEME DE DETECTION D'OBJETS IoT")
+    print("="*50)
+    print(f"Caméra: {args.camera}")
+    print(f"API: {args.api_url}")
+    print(f"Sensibilité: {args.sensitivity}")
+    print("="*50)
+    
+    # Test de l'API si demandé
+    if args.test_api:
+        system = DetectionSystem(args.camera, args.api_url)
+        if system.test_api_connection():
+            print("✅ Test API réussi")
+            return 0
+        else:
+            print("❌ Test API échoué")
+            return 1
+    
+    # Créer le système de détection
+    system = DetectionSystem(args.camera, args.api_url)
+    
+    # Configurer la sensibilité
+    system.adjust_detection_sensitivity(args.sensitivity)
+    
+    # Désactiver l'API si demandé
+    if args.no_api:
+        system.detection_enabled = False
+        print("⚠️ Mode hors-ligne activé (pas d'envoi API)")
     else:
-        detector.run()
+        # Tester la connexion API
+        system.test_api_connection()
+    
+    # Lancer le système
+    try:
+        if system.run():
+            print("✅ Session terminée avec succès")
+            return 0
+        else:
+            print("❌ Erreur durant l'exécution")
+            return 1
+    except KeyboardInterrupt:
+        print("\n👋 Arrêt par l'utilisateur")
+        return 0
+
+# Classes utilitaires pour les tests et configuration avancée
+class ColorCalibrator:
+    """Utilitaire pour calibrer les couleurs"""
+    
+    def __init__(self):
+        self.trackbars_created = False
+    
+    def create_trackbars(self):
+        """Créer les barres de réglage HSV"""
+        cv2.namedWindow('HSV Calibrator')
+        cv2.createTrackbar('H Min', 'HSV Calibrator', 0, 179, lambda x: None)
+        cv2.createTrackbar('H Max', 'HSV Calibrator', 179, 179, lambda x: None)
+        cv2.createTrackbar('S Min', 'HSV Calibrator', 0, 255, lambda x: None)
+        cv2.createTrackbar('S Max', 'HSV Calibrator', 255, 255, lambda x: None)
+        cv2.createTrackbar('V Min', 'HSV Calibrator', 0, 255, lambda x: None)
+        cv2.createTrackbar('V Max', 'HSV Calibrator', 255, 255, lambda x: None)
+        self.trackbars_created = True
+    
+    def get_hsv_range(self):
+        """Obtenir les valeurs HSV des trackbars"""
+        if not self.trackbars_created:
+            return None
+        
+        h_min = cv2.getTrackbarPos('H Min', 'HSV Calibrator')
+        h_max = cv2.getTrackbarPos('H Max', 'HSV Calibrator')
+        s_min = cv2.getTrackbarPos('S Min', 'HSV Calibrator')
+        s_max = cv2.getTrackbarPos('S Max', 'HSV Calibrator')
+        v_min = cv2.getTrackbarPos('V Min', 'HSV Calibrator')
+        v_max = cv2.getTrackbarPos('V Max', 'HSV Calibrator')
+        
+        return (np.array([h_min, s_min, v_min]), np.array([h_max, s_max, v_max]))
+
+class PerformanceMonitor:
+    """Moniteur de performance pour le système de détection"""
+    
+    def __init__(self):
+        self.frame_times = []
+        self.detection_times = []
+        self.api_response_times = []
+        self.start_time = time.time()
+    
+    def record_frame_time(self, frame_time):
+        """Enregistrer le temps de traitement d'une frame"""
+        self.frame_times.append(frame_time)
+        if len(self.frame_times) > 100:  # Garder seulement les 100 dernières
+            self.frame_times.pop(0)
+    
+    def record_detection_time(self, detection_time):
+        """Enregistrer le temps de détection"""
+        self.detection_times.append(detection_time)
+        if len(self.detection_times) > 100:
+            self.detection_times.pop(0)
+    
+    def get_fps(self):
+        """Calculer les FPS moyens"""
+        if not self.frame_times:
+            return 0
+        avg_frame_time = sum(self.frame_times) / len(self.frame_times)
+        return 1.0 / avg_frame_time if avg_frame_time > 0 else 0
+    
+    def get_stats(self):
+        """Obtenir les statistiques de performance"""
+        return {
+            'fps': self.get_fps(),
+            'avg_detection_time': sum(self.detection_times) / len(self.detection_times) if self.detection_times else 0,
+            'total_runtime': time.time() - self.start_time,
+            'total_frames': len(self.frame_times)
+        }
 
 if __name__ == "__main__":
-    main()
+    # Vérifier les dépendances
+    try:
+        import cv2
+        import numpy as np
+        import requests
+    except ImportError as e:
+        print(f"❌ Dépendance manquante: {e}")
+        print("💡 Installez les dépendances: pip install -r requirements.txt")
+        sys.exit(1)
+    
+    # Lancer le programme principal
+    sys.exit(main())

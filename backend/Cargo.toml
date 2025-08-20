@@ -1,173 +1,43 @@
 [package]
-name = "detection-system"
-version = "1.0.0"
+name = "detection_backend"
+version = "0.1.0"
 edition = "2021"
-authors = ["Votre Nom <votre.email@example.com>"]
-description = "Système de détection d'objets IoT avec interface web sécurisée"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/username/detection-system"
-readme = "README.md"
-keywords = ["iot", "detection", "web", "api", "security"]
-categories = ["web-programming", "embedded", "api-bindings"]
-
-[profile.release]
-# Optimisations pour la production
-opt-level = 3
-debug = false
-strip = true
-lto = true
-codegen-units = 1
-panic = "abort"
-
-[profile.dev]
-# Configuration pour le développement
-opt-level = 0
-debug = true
-overflow-checks = true
 
 [dependencies]
-# Framework web avec sécurité renforcée
-axum = { version = "0.7.5", features = ["multipart", "ws", "tracing"] }
-axum-extra = { version = "0.9.3", features = ["typed-header", "cookie"] }
-tokio = { version = "1.37", features = ["full", "tracing"] }
-tower = { version = "0.4.13", features = ["timeout", "load-shed", "limit"] }
-tower-http = { version = "0.5.2", features = [
-    "cors", 
-    "fs", 
-    "trace", 
-    "compression", 
-    "timeout",
-    "request-id",
-    "sensitive-headers",
-    "catch-panic"
-]}
+# Framework web async
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors"] }
 
-# Sécurité HTTP
-hyper = { version = "1.0", features = ["server", "http1", "http2"] }
-headers = "0.4.0"
+# Sérialisation JSON
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
-# Sérialisation sécurisée
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.115"
-serde_with = "3.7.0"
+# Base de données SQLite
+rusqlite = { version = "0.31", features = ["bundled"] }
 
-# Base de données avec sécurité
-sqlx = { version = "0.8.0", features = [
-    "runtime-tokio-rustls", 
-    "sqlite", 
-    "chrono", 
-    "migrate", 
-    "any",
-    "macros"
-]}
+# Gestion des dates
+chrono = { version = "0.4", features = ["serde"] }
 
-# Gestion du temps
-chrono = { version = "0.4.38", features = ["serde", "clock"] }
+# Authentification JWT
+jsonwebtoken = "9.2"
+sha2 = "0.10"
 
-# Sécurité et authentification
-bcrypt = "0.15.1"
-uuid = { version = "1.8.0", features = ["v4", "serde"] }
-jsonwebtoken = "9.3.0"
-argon2 = "0.5.3"  # Alternative plus sécurisée à bcrypt
-rand = "0.8.5"
-ring = "0.17.8"   # Cryptographie robuste
+# Logging
+env_logger = "0.10"
+log = "0.4"
 
-# Configuration sécurisée
-config = "0.14.0"
-dotenvy = "0.15.7"  # Remplacement de dotenv (déprécié)
-
-# Logging et monitoring
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = [
-    "env-filter", 
-    "json",
-    "registry",
-    "fmt"
-]}
-tracing-appender = "0.2.3"
-opentelemetry = { version = "0.22.0", optional = true }
-
-# Validation et sanitisation
-validator = { version = "0.18.1", features = ["derive", "phone", "card"] }
-htmlescape = "0.3.1"
-ammonia = "4.0.0"  # Sanitisation HTML/XSS
-
-# Gestion d'erreurs
-anyhow = "1.0.81"
-thiserror = "1.0.58"
-
-# Utilitaires de sécurité
-secrecy = { version = "0.8.0", features = ["serde"] }  # Gestion sécurisée des secrets
-constant_time_eq = "0.3.0"  # Comparaisons à temps constant
-subtle = "2.5.0"  # Opérations cryptographiques
-
-# Rate limiting et protection
-governor = "0.6.3"  # Rate limiting
-dashmap = "5.5.3"   # HashMap concurrent pour le cache
-
-# Compression et performance (optionnelle)
-brotli = { version = "6.0.0", optional = true }
-flate2 = { version = "1.0.28", optional = true }  # <- CHANGEMENT ICI : ajout de optional = true
-
-# Monitoring et métriques (optionnel)
-metrics = { version = "0.23.0", optional = true }
-metrics-exporter-prometheus = { version = "0.15.1", optional = true }
-
-# Validation et parsing sécurisés
-url = { version = "2.5.0", features = ["serde"] }
-mime = "0.3.17"
-mime_guess = "2.0.4"
-
-# Lazy static pour les données globales
-lazy_static = "1.4.0"
-
-# Async utilities
-futures = "0.3.30"
-async-trait = "0.1.79"
+# HTTP client (pour les tests)
+reqwest = { version = "0.11", features = ["json"], optional = true }
 
 [dev-dependencies]
-# Tests et benchmarks
-tokio-test = "0.4.4"
-criterion = { version = "0.5.1", features = ["html_reports"] }
-proptest = "1.4.0"
-mockall = "0.12.1"
-wiremock = "0.6.0"
-
-# Test de charge
-reqwest = { version = "0.12.2", features = ["json"] }
+reqwest = { version = "0.11", features = ["json"] }
 
 [features]
-default = ["sqlite", "compression", "security-headers"]
-
-# Features de base de données
-sqlite = ["sqlx/sqlite"]
-postgres = ["sqlx/postgres"]
-mysql = ["sqlx/mysql"]
-
-# Features de sécurité
-security-headers = []
-rate-limiting = ["governor"]
-metrics = ["dep:metrics", "dep:metrics-exporter-prometheus"]
-telemetry = ["dep:opentelemetry"]
-
-# Features de compression (corrigée)
-compression = ["brotli", "flate2"]  # <- Maintenant compatible car flate2 est optionnelle
-
-# Feature de développement
-dev = ["tokio/test-util"]
+default = []
+testing = ["reqwest"]
 
 [[bin]]
-name = "detection-system"
+name = "detection_backend"
 path = "src/main.rs"
-
-[[bin]]
-name = "db-migrate"
-path = "src/bin/migrate.rs"
-
-[[bench]]
-name = "api_benchmark"
-harness = false
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
