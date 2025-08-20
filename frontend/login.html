@@ -3,24 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - Système de Détection IoT</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <title>Connexion Sécurisée</title>
     <style>
-        :root {
-            --primary-color: #2563eb;
-            --primary-dark: #1d4ed8;
-            --secondary-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --dark-color: #1f2937;
-            --light-color: #f8fafc;
-            --border-color: #e5e7eb;
-            --text-color: #374151;
-            --text-light: #6b7280;
-            --success-color: #059669;
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -28,152 +12,116 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Arial', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--text-color);
         }
 
         .login-container {
             background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            padding: 3rem 2rem;
             border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 420px;
-            margin: 20px;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
         }
 
         .login-header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 2rem;
         }
 
-        .login-logo {
-            font-size: 3rem;
-            color: var(--primary-color);
-            margin-bottom: 10px;
+        .login-header h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
         }
 
-        .login-title {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--dark-color);
-            margin-bottom: 8px;
-        }
-
-        .login-subtitle {
-            color: var(--text-light);
-            font-size: 1rem;
+        .login-header p {
+            color: #666;
+            font-size: 0.9rem;
         }
 
         .form-group {
-            margin-bottom: 25px;
+            margin-bottom: 1.5rem;
         }
 
-        .form-label {
+        .form-group label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 0.5rem;
+            color: #333;
             font-weight: 600;
-            color: var(--dark-color);
         }
 
-        .form-input-wrapper {
-            position: relative;
-        }
-
-        .form-input {
+        .form-group input {
             width: 100%;
-            padding: 15px 20px 15px 50px;
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
+            padding: 1rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
             font-size: 1rem;
             transition: all 0.3s ease;
-            background: white;
+            background: #f8f9fa;
         }
 
-        .form-input:focus {
+        .form-group input:focus {
             outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-            transform: translateY(-1px);
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .form-icon {
-            position: absolute;
-            left: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-light);
-            font-size: 1.1rem;
-            transition: color 0.3s ease;
-        }
-
-        .form-input:focus + .form-icon {
-            color: var(--primary-color);
-        }
-
-        .password-toggle {
-            position: absolute;
-            right: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-light);
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 5px;
-            transition: all 0.3s ease;
-        }
-
-        .password-toggle:hover {
-            color: var(--primary-color);
-            background: rgba(37, 99, 235, 0.1);
-        }
-
-        .login-button {
+        .login-btn {
             width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            transition: transform 0.2s ease;
         }
 
-        .login-button:hover {
+        .login-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
-        .login-button:active {
-            transform: translateY(0);
-        }
-
-        .login-button:disabled {
+        .login-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
         }
 
-        .loading-spinner {
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            text-align: center;
+            display: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .loading::after {
+            content: '';
             width: 20px;
             height: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top: 2px solid white;
+            border: 2px solid #667eea;
+            border-top: 2px solid transparent;
             border-radius: 50%;
+            display: inline-block;
             animation: spin 1s linear infinite;
         }
 
@@ -182,184 +130,163 @@
             100% { transform: rotate(360deg); }
         }
 
-        .alert {
-            padding: 15px 20px;
+        .security-notice {
+            background: #e8f4f8;
+            color: #0c5460;
+            padding: 1rem;
             border-radius: 10px;
-            margin-bottom: 25px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 500;
-            opacity: 0;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-        }
-
-        .alert.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .alert-success {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid var(--secondary-color);
-            color: var(--success-color);
-        }
-
-        .alert-error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid var(--danger-color);
-            color: var(--danger-color);
-        }
-
-        .alert-warning {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid var(--warning-color);
-            color: #d97706;
-        }
-
-        .demo-accounts {
-            background: rgba(16, 185, 129, 0.05);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-        }
-
-        .demo-accounts h4 {
-            color: var(--success-color);
-            font-size: 1rem;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .demo-account {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .demo-account:hover {
-            background: rgba(37, 99, 235, 0.05);
-            border-color: var(--primary-color);
-            transform: translateX(5px);
-        }
-
-        .demo-account:last-child {
-            margin-bottom: 0;
-        }
-
-        .demo-info {
-            flex: 1;
-        }
-
-        .demo-username {
-            font-weight: 600;
-            color: var(--dark-color);
-            font-size: 0.95rem;
-        }
-
-        .demo-role {
-            font-size: 0.8rem;
-            color: var(--text-light);
-        }
-
-        .demo-password {
-            font-family: 'Courier New', monospace;
+            margin-bottom: 1.5rem;
             font-size: 0.85rem;
-            color: var(--text-light);
-            background: rgba(0, 0, 0, 0.05);
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .footer-links {
             text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .footer-link {
-            color: var(--text-light);
-            text-decoration: none;
-            font-size: 0.9rem;
-            margin: 0 15px;
-            transition: color 0.3s ease;
-        }
-
-        .footer-link:hover {
-            color: var(--primary-color);
-        }
-
-        /* Animations */
-        .animate-in {
-            animation: slideInUp 0.6s ease-out;
-        }
-
-        @keyframes slideInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Security indicator */
-        .security-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--success-color);
-            font-size: 0.85rem;
-            margin-bottom: 20px;
-            padding: 8px 12px;
-            background: rgba(16, 185, 129, 0.1);
-            border-radius: 8px;
-        }
-
-        /* Responsive */
-        @media (max-width: 480px) {
-            .login-container {
-                margin: 10px;
-                padding: 30px 25px;
-            }
-
-            .login-title {
-                font-size: 1.5rem;
-            }
-
-            .demo-account {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
         }
     </style>
 </head>
 <body>
-    <div class="login-container animate-in">
-        <!-- Header -->
+    <div class="login-container">
         <div class="login-header">
-            <div class="login-logo">
-                <i class="fas fa-shield-alt"></i>
-            </div>
-            <h1 class="login-title">Connexion Sécurisée</h1>
-            <p class="login-subtitle">Système de Détection d'Objets IoT</p>
+            <h1>🔒 Accès Sécurisé</h1>
+            <p>Zone d'administration protégée</p>
         </div>
 
-        <!-- Security Indicator -->
-        <div class="security-indicator">
-            <i class="fas fa-lock"></i>
+        <div class="security-notice">
+            🛡️ Connexion cryptée et sécurisée
+        </div>
+
+        <form id="loginForm">
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="form-group">
+                <label for="username">Nom d'utilisateur</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    required 
+                    autocomplete="username"
+                    autocapitalize="none"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Mot de passe</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    required 
+                    autocomplete="current-password"
+                >
+            </div>
+
+            <button type="submit" class="login-btn" id="loginBtn">
+                Se connecter
+            </button>
+
+            <div class="loading" id="loading"></div>
+        </form>
+    </div>
+
+    <script>
+        class SecureLogin {
+            constructor() {
+                this.form = document.getElementById('loginForm');
+                this.usernameInput = document.getElementById('username');
+                this.passwordInput = document.getElementById('password');
+                this.loginBtn = document.getElementById('loginBtn');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.loading = document.getElementById('loading');
+                
+                this.initializeEvents();
+            }
+
+            initializeEvents() {
+                this.form.addEventListener('submit', (e) => this.handleLogin(e));
+                
+                // Effacer les erreurs quand l'utilisateur tape
+                [this.usernameInput, this.passwordInput].forEach(input => {
+                    input.addEventListener('input', () => this.clearError());
+                });
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                
+                const username = this.usernameInput.value.trim();
+                const password = this.passwordInput.value;
+
+                // Validation basique
+                if (!username || !password) {
+                    this.showError('Veuillez remplir tous les champs');
+                    return;
+                }
+
+                this.setLoading(true);
+                
+                try {
+                    const response = await fetch('http://localhost:3000/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        // Stocker le token de session (sans localStorage)
+                        sessionStorage.setItem('admin_token', result.token);
+                        sessionStorage.setItem('admin_user', username);
+                        
+                        // Redirection immédiate vers la page historique
+                        window.location.href = 'history.html';
+                        
+                    } else {
+                        this.showError(result.message || 'Identifiants incorrects');
+                    }
+
+                } catch (error) {
+                    console.error('Erreur de connexion:', error);
+                    this.showError('Erreur de connexion au serveur');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            setLoading(isLoading) {
+                this.loginBtn.disabled = isLoading;
+                this.loading.style.display = isLoading ? 'block' : 'none';
+                this.loginBtn.textContent = isLoading ? 'Connexion...' : 'Se connecter';
+            }
+
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.style.display = 'block';
+                
+                // Effacer l'erreur après 5 secondes
+                setTimeout(() => this.clearError(), 5000);
+            }
+
+            clearError() {
+                this.errorMessage.style.display = 'none';
+            }
+        }
+
+        // Protection contre l'injection et les attaques
+        document.addEventListener('DOMContentLoaded', () => {
+            new SecureLogin();
+            
+            // Désactiver le clic droit et certaines touches
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('keydown', (e) => {
+                // Bloquer F12, Ctrl+Shift+I, Ctrl+U, etc.
+                if (e.key === 'F12' || 
+                    (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+                    (e.ctrlKey && e.key === 'u')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

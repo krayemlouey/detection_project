@@ -1,28 +1,3 @@
-# Détection d'objets avec YOLOv8
-ultralytics==8.0.196
-
-# Vision par ordinateur
 opencv-python==4.8.1.78
-
-# Calculs numériques
-numpy==1.26.4
-
-
-# Requêtes HTTP vers l'API
+numpy==1.24.3
 requests==2.31.0
-
-# Gestion du temps et dates
-python-dateutil==2.8.2
-
-# Interface utilisateur (optionnel)
-# tkinter est inclus avec Python par défaut
-
-# Dépendances pour YOLOv8
-torch>=1.7.0
-torchvision>=0.8.1
-Pillow>=7.1.2
-matplotlib>=3.2.2
-tqdm>=4.64.0
-
-# Utilitaires
-#uuid

@@ -1,1016 +1,513 @@
-<!-- history.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historique - Système de Détection IoT</title>
+    <title>Historique - Base de Données</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* Styles spéciaux pour le bouton reset admin */
         .admin-controls {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 2px solid #fca5a5;
-            display: none; /* Masqué par défaut */
-        }
-
-        .admin-controls.visible {
-            display: block;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 2rem;
         }
 
         .admin-controls h3 {
+            color: #856404;
+            margin-bottom: 1rem;
+        }
+
+        .danger-zone {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .btn-danger {
+            background: #dc3545;
             color: white;
-            margin: 0 0 15px 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .admin-controls .admin-warning {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 10px;
-            color: #fed7d7;
-            font-size: 14px;
-            margin-bottom: 15px;
-        }
-
-        .reset-btn-admin {
-            background: #ffffff;
-            color: #dc2626;
-            border: 2px solid #dc2626;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .reset-btn-admin:hover {
-            background: #dc2626;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(220, 38, 38, 0.3);
-        }
-
-        .reset-btn-admin:active {
-            transform: translateY(0);
-        }
-
-        .reset-confirmation {
-            margin-top: 15px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            display: none;
-        }
-
-        .reset-confirmation.show {
-            display: block;
-        }
-
-        .reset-confirmation p {
-            color: white;
-            margin: 0 0 15px 0;
-            font-weight: 500;
-        }
-
-        .reset-confirmation .confirmation-buttons {
-            display: flex;
-            gap: 10px;
-        }
-
-        .reset-confirmation button {
-            padding: 8px 16px;
-            border-radius: 6px;
             border: none;
-            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            font-weight: bold;
         }
 
-        .confirm-reset-btn {
-            background: #ffffff;
-            color: #dc2626;
+        .btn-danger:hover {
+            background: #c82333;
         }
 
-        .cancel-reset-btn {
-            background: rgba(255, 255, 255, 0.2);
+        .filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 0.5rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 5px;
+        }
+
+        .data-table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .data-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .color-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
             color: white;
         }
 
-        .reset-stats {
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            font-size: 14px;
-            color: #fed7d7;
+        .color-badge.red { background: #e74c3c; }
+        .color-badge.green { background: #27ae60; }
+        .color-badge.blue { background: #3498db; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .logout-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
         }
     </style>
 </head>
 <body>
-    <div class="history-container">
-        <!-- Header -->
-        <header class="history-header">
-            <div class="header-left">
-                <h1><i class="fas fa-history"></i> Historique des Détections</h1>
-                <div class="user-info">
-                    Connecté en tant que: <span id="currentUser">admin</span>
-                </div>
-            </div>
-            <div class="header-right">
-                <button onclick="window.location.href='index.html'" class="btn btn-secondary">
-                    <i class="fas fa-tachometer-alt"></i> Dashboard
-                </button>
-                <button onclick="logout()" class="btn btn-danger">
-                    <i class="fas fa-sign-out-alt"></i> Déconnexion
-                </button>
-            </div>
+    <button class="logout-btn" onclick="logout()">🚪 Déconnexion</button>
+
+    <div class="container">
+        <header>
+            <h1>📊 Historique des Détections</h1>
+            <p>Gestion de la base de données</p>
         </header>
 
-        <!-- Contrôles Admin (Reset) -->
-        <div class="admin-controls" id="adminControls">
-            <h3>
-                <i class="fas fa-user-shield"></i>
-                Contrôles Administrateur
-            </h3>
-            
-            <div class="admin-warning">
-                <i class="fas fa-exclamation-triangle"></i>
-                <strong>Attention :</strong> Cette action supprimera définitivement tous les compteurs et données de détection. Cette opération ne peut pas être annulée.
+        <!-- Contrôles Admin -->
+        <div class="admin-controls">
+            <h3>🔧 Contrôles Administrateur</h3>
+            <div class="admin-actions">
+                <button class="btn btn-primary" onclick="exportData('csv')">📥 Exporter CSV</button>
+                <button class="btn btn-secondary" onclick="exportData('json')">📥 Exporter JSON</button>
+                <button class="btn btn-info" onclick="refreshData()">🔄 Actualiser</button>
             </div>
             
-            <button class="reset-btn-admin" onclick="showResetConfirmation()">
-                <i class="fas fa-trash-alt"></i>
-                Réinitialiser Tous les Compteurs
-            </button>
-            
-            <div class="reset-confirmation" id="resetConfirmation">
-                <p>Êtes-vous absolument sûr de vouloir réinitialiser tous les compteurs et supprimer toutes les données ?</p>
-                <div class="confirmation-buttons">
-                    <button class="confirm-reset-btn" onclick="performGlobalReset()">
-                        <i class="fas fa-check"></i> Oui, Réinitialiser
-                    </button>
-                    <button class="cancel-reset-btn" onclick="hideResetConfirmation()">
-                        <i class="fas fa-times"></i> Annuler
-                    </button>
-                </div>
-            </div>
-            
-            <div class="reset-stats" id="resetStats">
-                Dernière réinitialisation: <span id="lastResetTime">Jamais</span>
+            <div class="danger-zone">
+                <h4>⚠️ Zone Dangereuse</h4>
+                <p>Cette action supprimera TOUTES les données de la base !</p>
+                <button class="btn-danger" onclick="confirmResetDatabase()">🗑️ Reset Database</button>
             </div>
         </div>
 
-        <!-- Barre de contrôles -->
-        <div class="controls-bar">
-            <div class="filters-section">
-                <div class="filter-group">
-                    <label for="fromDate">Du:</label>
-                    <input type="date" id="fromDate">
-                </div>
-                
-                <div class="filter-group">
-                    <label for="toDate">Au:</label>
-                    <input type="date" id="toDate">
-                </div>
-                
-                <div class="filter-group">
-                    <label for="typeFilter">Type:</label>
-                    <select id="typeFilter">
-                        <option value="">Tous les types</option>
-                        <option value="Carte microchip">Carte microchip</option>
-                        <option value="Carte personnalisée">Carte personnalisée</option>
-                        <option value="STM32">STM32</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group">
-                    <label for="colorFilter">Couleur:</label>
-                    <select id="colorFilter">
-                        <option value="">Toutes les couleurs</option>
-                        <option value="red">Rouge</option>
-                        <option value="green">Vert</option>
-                        <option value="blue">Bleu</option>
-                    </select>
-                </div>
-                
-                <button onclick="applyFilters()" class="btn btn-primary">
-                    <i class="fas fa-filter"></i> Filtrer
-                </button>
-                
-                <button onclick="clearFilters()" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Effacer
-                </button>
-            </div>
-
-            <div class="actions-section">
-                <button onclick="refreshHistory()" class="btn btn-info">
-                    <i class="fas fa-sync"></i> Actualiser
-                </button>
-                
-                <button onclick="showDownloadModal()" class="btn btn-success">
-                    <i class="fas fa-download"></i> Télécharger
-                </button>
-                
-                <button onclick="showAddObjectModal()" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Ajouter Objet
-                </button>
-            </div>
-        </div>
-
-        <!-- Statistiques rapides -->
-        <div class="stats-overview">
+        <!-- Statistiques -->
+        <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon red">
-                    <i class="fas fa-microchip"></i>
-                </div>
-                <div class="stat-info">
-                    <h3 id="redCount">0</h3>
-                    <p>Cartes Microchip</p>
-                </div>
+                <h3>Total Détections</h3>
+                <div class="number" id="totalDetections">0</div>
             </div>
-            
             <div class="stat-card">
-                <div class="stat-icon green">
-                    <i class="fas fa-credit-card"></i>
-                </div>
-                <div class="stat-info">
-                    <h3 id="greenCount">0</h3>
-                    <p>Cartes Personnalisées</p>
-                </div>
+                <h3>🔴 Rouges</h3>
+                <div class="number" id="redDetections">0</div>
             </div>
-            
             <div class="stat-card">
-                <div class="stat-icon blue">
-                    <i class="fas fa-microchip"></i>
-                </div>
-                <div class="stat-info">
-                    <h3 id="blueCount">0</h3>
-                    <p>STM32</p>
-                </div>
+                <h3>🟢 Verts</h3>
+                <div class="number" id="greenDetections">0</div>
             </div>
-            
             <div class="stat-card">
-                <div class="stat-icon gray">
-                    <i class="fas fa-database"></i>
-                </div>
-                <div class="stat-info">
-                    <h3 id="totalCount">0</h3>
-                    <p>Total Détections</p>
-                </div>
+                <h3>🔵 Bleus</h3>
+                <div class="number" id="blueDetections">0</div>
             </div>
         </div>
 
-        <!-- Table des détections -->
-        <div class="history-table-container">
-            <div class="table-header">
-                <h3>Historique Détaillé</h3>
-                <div class="table-info">
-                    <span id="recordsCount">0 enregistrements</span>
-                    <div class="pagination-info">
-                        Page <span id="currentPage">1</span> sur <span id="totalPages">1</span>
-                    </div>
-                </div>
+        <!-- Filtres -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Date de début</label>
+                <input type="date" id="dateFrom">
             </div>
-            
-            <div class="table-wrapper">
-                <table id="historyTable">
-                    <thead>
-                        <tr>
-                            <th onclick="sortTable(0)">
-                                G_ID <i class="fas fa-sort"></i>
-                            </th>
-                            <th onclick="sortTable(1)">
-                                Ref Count <i class="fas fa-sort"></i>
-                            </th>
-                            <th onclick="sortTable(2)">
-                                Type <i class="fas fa-sort"></i>
-                            </th>
-                            <th onclick="sortTable(3)">
-                                Couleur <i class="fas fa-sort"></i>
-                            </th>
-                            <th onclick="sortTable(4)">
-                                Date/Heure <i class="fas fa-sort"></i>
-                            </th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="historyTableBody">
-                        <tr class="loading-row">
-                            <td colspan="6">
-                                <div class="loading-spinner">
-                                    <i class="fas fa-spinner fa-spin"></i>
-                                    Chargement des données...
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="filter-group">
+                <label>Date de fin</label>
+                <input type="date" id="dateTo">
             </div>
-            
-            <!-- Pagination -->
-            <div class="pagination" id="pagination">
-                <button class="pagination-btn" onclick="changePage('prev')" id="prevBtn">
-                    <i class="fas fa-chevron-left"></i> Précédent
-                </button>
-                
-                <div class="pagination-numbers" id="paginationNumbers">
-                    <!-- Numéros de pages générés dynamiquement -->
-                </div>
-                
-                <button class="pagination-btn" onclick="changePage('next')" id="nextBtn">
-                    Suivant <i class="fas fa-chevron-right"></i>
-                </button>
+            <div class="filter-group">
+                <label>Couleur</label>
+                <select id="colorFilter">
+                    <option value="">Toutes</option>
+                    <option value="red">Rouge</option>
+                    <option value="green">Vert</option>
+                    <option value="blue">Bleu</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Type</label>
+                <select id="typeFilter">
+                    <option value="">Tous</option>
+                    <option value="Carte microchip">Carte microchip</option>
+                    <option value="Carte personnalisée">Carte personnalisée</option>
+                    <option value="STM32">STM32</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" onclick="applyFilters()">🔍 Filtrer</button>
             </div>
         </div>
-    </div>
 
-    <!-- Modal de téléchargement -->
-    <div id="downloadModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Télécharger l'Historique</h3>
-                <span class="close" onclick="closeModal('downloadModal')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form id="downloadForm">
-                    <div class="form-group">
-                        <label for="downloadFromDate">Date de début:</label>
-                        <input type="date" id="downloadFromDate" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="downloadToDate">Date de fin:</label>
-                        <input type="date" id="downloadToDate" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="downloadFormat">Format:</label>
-                        <select id="downloadFormat">
-                            <option value="txt">Fichier TXT</option>
-                            <option value="csv">Fichier CSV</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('downloadModal')">
-                            Annuler
-                        </button>
-                        <button type="submit" class="btn btn-success">
-                            <i class="fas fa-download"></i> Télécharger
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal d'ajout d'objet -->
-    <div id="addObjectModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Ajouter un Nouvel Objet</h3>
-                <span class="close" onclick="closeModal('addObjectModal')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form id="addObjectForm">
-                    <div class="form-group">
-                        <label for="newGId">G_ID:</label>
-                        <input type="text" id="newGId" required placeholder="Ex: RED_CUSTOM_001">
-                        <small>Identifiant unique pour cet objet</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="newObjectType">Type d'objet:</label>
-                        <select id="newObjectType" required>
-                            <option value="">Sélectionner le type...</option>
-                            <option value="Carte microchip">Carte microchip</option>
-                            <option value="Carte personnalisée">Carte personnalisée</option>
-                            <option value="STM32">STM32</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="newObjectColor">Couleur:</label>
-                        <select id="newObjectColor" required>
-                            <option value="">Sélectionner la couleur...</option>
-                            <option value="red">Rouge</option>
-                            <option value="green">Vert</option>
-                            <option value="blue">Bleu</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('addObjectModal')">
-                            Annuler
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Ajouter
-                        </button>
-                    </div>
-                </form>
-            </div>
+        <!-- Table des données -->
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>G_ID</th>
+                        <th>Type d'Objet</th>
+                        <th>Couleur</th>
+                        <th>Date/Heure</th>
+                        <th>Compteur</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            Chargement des données...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
     <script>
-        // Variables globales
-        let currentPage = 1;
-        let itemsPerPage = 20;
-        let sortColumn = -1;
-        let sortDirection = 'asc';
-        let allDetections = [];
-        let filteredDetections = [];
-        let isAdmin = false;
-
-        // Initialisation
-        document.addEventListener('DOMContentLoaded', function() {
-            checkAuthentication();
-            initializeHistory();
-        });
-
-        function checkAuthentication() {
-            const sessionToken = localStorage.getItem('sessionToken');
-            if (!sessionToken) {
-                window.location.href = 'login.html';
-                return;
+        class HistoryManager {
+            constructor() {
+                this.data = [];
+                this.filteredData = [];
+                
+                this.checkAuth();
+                this.initializeFilters();
+                this.loadData();
             }
 
-            const username = localStorage.getItem('username') || 'admin';
-            document.getElementById('currentUser').textContent = username;
-            
-            // Vérifier si c'est un admin (pour notre prototype, seul "admin" est admin)
-            isAdmin = username === 'admin';
-            
-            if (isAdmin) {
-                document.getElementById('adminControls').classList.add('visible');
-                loadLastResetTime();
-                console.log('👑 Utilisateur admin détecté - Contrôles avancés activés');
-            } else {
-                console.log('👤 Utilisateur standard');
+            checkAuth() {
+                const token = sessionStorage.getItem('admin_token');
+                if (!token) {
+                    window.location.href = 'login.html';
+                    return;
+                }
             }
-        }
 
-        function loadLastResetTime() {
-            const lastReset = localStorage.getItem('lastGlobalReset');
-            if (lastReset) {
-                document.getElementById('lastResetTime').textContent = 
-                    new Date(lastReset).toLocaleDateString('fr-FR') + ' ' + 
-                    new Date(lastReset).toLocaleTimeString('fr-FR');
-            }
-        }
+            async loadData() {
+                try {
+                    const response = await fetch('http://localhost:3000/api/detections', {
+                        headers: {
+                            'Authorization': `Bearer ${sessionStorage.getItem('admin_token')}`
+                        }
+                    });
 
-        function showResetConfirmation() {
-            document.getElementById('resetConfirmation').classList.add('show');
-        }
-
-        function hideResetConfirmation() {
-            document.getElementById('resetConfirmation').classList.remove('show');
-        }
-
-        async function performGlobalReset() {
-            try {
-                // Afficher un indicateur de chargement
-                const confirmBtn = document.querySelector('.confirm-reset-btn');
-                const originalText = confirmBtn.innerHTML;
-                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Réinitialisation...';
-                confirmBtn.disabled = true;
-
-                // Simuler un appel API pour le reset (à implémenter côté backend)
-                // Pour le moment, on reset les données locales
-                
-                // Réinitialiser les statistiques locales
-                resetLocalCounters();
-                
-                // Marquer le temps de reset
-                const resetTime = new Date().toISOString();
-                localStorage.setItem('lastGlobalReset', resetTime);
-                
-                // Simuler un délai
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Mettre à jour l'affichage
-                await loadHistory();
-                loadLastResetTime();
-                
-                hideResetConfirmation();
-                showNotification('Réinitialisation globale effectuée avec succès', 'success');
-                
-                console.log('🔄 Reset global effectué par admin');
-                
-                // Restaurer le bouton
-                confirmBtn.innerHTML = originalText;
-                confirmBtn.disabled = false;
-                
-            } catch (error) {
-                console.error('Erreur lors du reset:', error);
-                showNotification('Erreur lors de la réinitialisation', 'error');
-                
-                // Restaurer le bouton en cas d'erreur
-                const confirmBtn = document.querySelector('.confirm-reset-btn');
-                confirmBtn.innerHTML = '<i class="fas fa-check"></i> Oui, Réinitialiser';
-                confirmBtn.disabled = false;
-            }
-        }
-
-        function resetLocalCounters() {
-            // Reset des compteurs dans le localStorage (si utilisés)
-            localStorage.removeItem('detectionCounts');
-            
-            // Reset des statistiques affichées
-            document.getElementById('redCount').textContent = '0';
-            document.getElementById('greenCount').textContent = '0';
-            document.getElementById('blueCount').textContent = '0';
-            document.getElementById('totalCount').textContent = '0';
-        }
-
-        async function initializeHistory() {
-            await loadHistory();
-            setupEventListeners();
-            setDefaultDates();
-        }
-
-        function setupEventListeners() {
-            // Formulaire d'ajout d'objet
-            document.getElementById('addObjectForm').addEventListener('submit', handleAddObject);
-            
-            // Formulaire de téléchargement
-            document.getElementById('downloadForm').addEventListener('submit', handleDownload);
-            
-            // Fermeture des modals en cliquant à l'extérieur
-            window.addEventListener('click', function(event) {
-                const modals = document.querySelectorAll('.modal');
-                modals.forEach(modal => {
-                    if (event.target === modal) {
-                        modal.style.display = 'none';
+                    if (response.ok) {
+                        this.data = await response.json();
+                        this.filteredData = [...this.data];
+                        this.renderTable();
+                        this.updateStats();
+                    } else {
+                        throw new Error('Erreur de chargement');
                     }
-                });
-            });
-        }
-
-        function setDefaultDates() {
-            const today = new Date().toISOString().split('T')[0];
-            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            
-            document.getElementById('fromDate').value = weekAgo;
-            document.getElementById('toDate').value = today;
-            document.getElementById('downloadFromDate').value = weekAgo;
-            document.getElementById('downloadToDate').value = today;
-        }
-
-        async function loadHistory() {
-            try {
-                const response = await fetch('/api/history');
-                const result = await response.json();
-
-                if (result.success) {
-                    allDetections = result.data || [];
-                    filteredDetections = [...allDetections];
-                    updateStatistics();
-                    renderTable();
-                } else {
-                    showNotification('Erreur lors du chargement: ' + result.message, 'error');
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    this.renderError('Impossible de charger les données');
                 }
-            } catch (error) {
-                console.error('Erreur:', error);
-                showNotification('Erreur de connexion au serveur', 'error');
             }
-        }
 
-        function updateStatistics() {
-            const stats = {
-                'Carte microchip': 0,
-                'Carte personnalisée': 0,
-                'STM32': 0,
-                total: 0
-            };
-
-            filteredDetections.forEach(detection => {
-                if (stats.hasOwnProperty(detection.type)) {
-                    stats[detection.type] += detection.ref_count || 1;
+            renderTable() {
+                const tbody = document.getElementById('dataTableBody');
+                
+                if (this.filteredData.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem;">
+                                Aucune donnée trouvée
+                            </td>
+                        </tr>
+                    `;
+                    return;
                 }
-                stats.total += detection.ref_count || 1;
-            });
 
-            document.getElementById('redCount').textContent = stats['Carte microchip'];
-            document.getElementById('greenCount').textContent = stats['Carte personnalisée'];
-            document.getElementById('blueCount').textContent = stats['STM32'];
-            document.getElementById('totalCount').textContent = stats.total;
-        }
-
-        function renderTable() {
-            const tbody = document.getElementById('historyTableBody');
-            const start = (currentPage - 1) * itemsPerPage;
-            const end = start + itemsPerPage;
-            const pageDetections = filteredDetections.slice(start, end);
-
-            if (pageDetections.length === 0) {
-                tbody.innerHTML = `
-                    <tr class="empty-row">
-                        <td colspan="6">
-                            <div class="empty-message">
-                                <i class="fas fa-search"></i>
-                                <p>Aucune détection trouvée</p>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            } else {
-                tbody.innerHTML = pageDetections.map(detection => `
+                tbody.innerHTML = this.filteredData.map(item => `
                     <tr>
-                        <td class="g-id">${detection.g_id}</td>
-                        <td class="ref-count">${detection.ref_count || 1}</td>
-                        <td class="object-type">
-                            <span class="type-badge ${getColorClass(detection.color)}">
-                                ${detection.type}
-                            </span>
-                        </td>
-                        <td class="color">
-                            <span class="color-indicator ${detection.color}"></span>
-                            ${getColorName(detection.color)}
-                        </td>
-                        <td class="datetime">${formatDateTime(detection.datetime)}</td>
-                        <td class="actions">
-                            <button class="btn-action" onclick="viewDetails('${detection.g_id}')" title="Voir détails">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            ${isAdmin ? `
-                                <button class="btn-action danger" onclick="deleteDetection('${detection.g_id}')" title="Supprimer">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            ` : ''}
+                        <td>${item.id}</td>
+                        <td><code>${item.g_id}</code></td>
+                        <td>${item.type || item.object_type}</td>
+                        <td><span class="color-badge ${item.color}">${item.color.toUpperCase()}</span></td>
+                        <td>${new Date(item.datetime).toLocaleString('fr-FR')}</td>
+                        <td>${item.ref_count || 1}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="deleteRecord(${item.id})">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
             }
 
-            updatePagination();
-            document.getElementById('recordsCount').textContent = 
-                `${filteredDetections.length} enregistrement${filteredDetections.length > 1 ? 's' : ''}`;
-        }
-
-        function updatePagination() {
-            const totalPages = Math.ceil(filteredDetections.length / itemsPerPage);
-            document.getElementById('currentPage').textContent = currentPage;
-            document.getElementById('totalPages').textContent = totalPages;
-
-            const prevBtn = document.getElementById('prevBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            
-            prevBtn.disabled = currentPage <= 1;
-            nextBtn.disabled = currentPage >= totalPages;
-
-            // Générer les numéros de pages
-            const numbersContainer = document.getElementById('paginationNumbers');
-            let numbersHTML = '';
-            
-            const startPage = Math.max(1, currentPage - 2);
-            const endPage = Math.min(totalPages, currentPage + 2);
-
-            for (let i = startPage; i <= endPage; i++) {
-                numbersHTML += `
-                    <button class="pagination-number ${i === currentPage ? 'active' : ''}" 
-                            onclick="changePage(${i})">
-                        ${i}
-                    </button>
+            renderError(message) {
+                const tbody = document.getElementById('dataTableBody');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: #dc3545;">
+                            ❌ ${message}
+                        </td>
+                    </tr>
                 `;
             }
-            
-            numbersContainer.innerHTML = numbersHTML;
-        }
 
-        function changePage(action) {
-            const totalPages = Math.ceil(filteredDetections.length / itemsPerPage);
-            
-            if (typeof action === 'number') {
-                currentPage = action;
-            } else if (action === 'prev' && currentPage > 1) {
-                currentPage--;
-            } else if (action === 'next' && currentPage < totalPages) {
-                currentPage++;
-            }
-            
-            renderTable();
-        }
+            updateStats() {
+                const total = this.data.length;
+                const red = this.data.filter(item => item.color === 'red').length;
+                const green = this.data.filter(item => item.color === 'green').length;
+                const blue = this.data.filter(item => item.color === 'blue').length;
 
-        function sortTable(column) {
-            if (sortColumn === column) {
-                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortColumn = column;
-                sortDirection = 'asc';
+                document.getElementById('totalDetections').textContent = total;
+                document.getElementById('redDetections').textContent = red;
+                document.getElementById('greenDetections').textContent = green;
+                document.getElementById('blueDetections').textContent = blue;
             }
 
-            const columns = ['g_id', 'ref_count', 'type', 'color', 'datetime'];
-            const sortKey = columns[column];
+            initializeFilters() {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('dateTo').value = today;
+                
+                const oneWeekAgo = new Date();
+                oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                document.getElementById('dateFrom').value = oneWeekAgo.toISOString().split('T')[0];
+            }
 
-            filteredDetections.sort((a, b) => {
-                let valueA = a[sortKey];
-                let valueB = b[sortKey];
+            applyFilters() {
+                const dateFrom = document.getElementById('dateFrom').value;
+                const dateTo = document.getElementById('dateTo').value;
+                const colorFilter = document.getElementById('colorFilter').value;
+                const typeFilter = document.getElementById('typeFilter').value;
 
-                if (sortKey === 'ref_count') {
-                    valueA = parseInt(valueA) || 0;
-                    valueB = parseInt(valueB) || 0;
+                this.filteredData = this.data.filter(item => {
+                    const itemDate = new Date(item.datetime).toISOString().split('T')[0];
+                    
+                    // Filtre par date
+                    if (dateFrom && itemDate < dateFrom) return false;
+                    if (dateTo && itemDate > dateTo) return false;
+                    
+                    // Filtre par couleur
+                    if (colorFilter && item.color !== colorFilter) return false;
+                    
+                    // Filtre par type
+                    if (typeFilter && (item.type || item.object_type) !== typeFilter) return false;
+                    
+                    return true;
+                });
+
+                this.renderTable();
+            }
+
+            async exportData(format) {
+                const dataToExport = this.filteredData.map(item => ({
+                    ID: item.id,
+                    G_ID: item.g_id,
+                    Type: item.type || item.object_type,
+                    Couleur: item.color,
+                    DateTime: item.datetime,
+                    Compteur: item.ref_count || 1
+                }));
+
+                let content, filename, mimeType;
+
+                if (format === 'csv') {
+                    const headers = Object.keys(dataToExport[0]).join(',');
+                    const rows = dataToExport.map(item => Object.values(item).join(',')).join('\n');
+                    content = headers + '\n' + rows;
+                    filename = 'detections_export.csv';
+                    mimeType = 'text/csv';
+                } else if (format === 'json') {
+                    content = JSON.stringify(dataToExport, null, 2);
+                    filename = 'detections_export.json';
+                    mimeType = 'application/json';
                 }
 
-                if (sortKey === 'datetime') {
-                    valueA = new Date(valueA);
-                    valueB = new Date(valueB);
+                const blob = new Blob([content], { type: mimeType });
+                const url = window.URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }
+
+            async deleteRecord(id) {
+                if (!confirm('Êtes-vous sûr de vouloir supprimer cette détection ?')) {
+                    return;
                 }
 
-                if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
-                if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
-                return 0;
-            });
+                try {
+                    const response = await fetch(`http://localhost:3000/api/detections/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${sessionStorage.getItem('admin_token')}`
+                        }
+                    });
 
-            currentPage = 1;
-            renderTable();
-            updateSortIcons();
+                    if (response.ok) {
+                        this.loadData(); // Recharger les données
+                        alert('Détection supprimée avec succès');
+                    } else {
+                        throw new Error('Erreur lors de la suppression');
+                    }
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    alert('Impossible de supprimer la détection');
+                }
+            }
+
+            async resetDatabase() {
+                try {
+                    const response = await fetch('http://localhost:3000/api/reset', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${sessionStorage.getItem('admin_token')}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        this.data = [];
+                        this.filteredData = [];
+                        this.renderTable();
+                        this.updateStats();
+                        alert('Base de données réinitialisée avec succès');
+                    } else {
+                        throw new Error('Erreur lors de la réinitialisation');
+                    }
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    alert('Impossible de réinitialiser la base de données');
+                }
+            }
         }
 
-        function updateSortIcons() {
-            const headers = document.querySelectorAll('th i');
-            headers.forEach((icon, index) => {
-                icon.className = 'fas fa-sort';
-                if (index === sortColumn) {
-                    icon.className = `fas fa-sort-${sortDirection === 'asc' ? 'up' : 'down'}`;
-                }
-            });
+        // Variables globales pour les fonctions
+        let historyManager;
+
+        // Fonctions globales
+        function refreshData() {
+            historyManager.loadData();
         }
 
         function applyFilters() {
-            const fromDate = document.getElementById('fromDate').value;
-            const toDate = document.getElementById('toDate').value;
-            const typeFilter = document.getElementById('typeFilter').value;
-            const colorFilter = document.getElementById('colorFilter').value;
-
-            filteredDetections = allDetections.filter(detection => {
-                const detectionDate = new Date(detection.datetime).toISOString().split('T')[0];
-                
-                if (fromDate && detectionDate < fromDate) return false;
-                if (toDate && detectionDate > toDate) return false;
-                if (typeFilter && detection.type !== typeFilter) return false;
-                if (colorFilter && detection.color !== colorFilter) return false;
-                
-                return true;
-            });
-
-            currentPage = 1;
-            updateStatistics();
-            renderTable();
-            showNotification(`Filtres appliqués: ${filteredDetections.length} résultats`, 'success');
+            historyManager.applyFilters();
         }
 
-        function clearFilters() {
-            document.getElementById('fromDate').value = '';
-            document.getElementById('toDate').value = '';
-            document.getElementById('typeFilter').value = '';
-            document.getElementById('colorFilter').value = '';
-            
-            filteredDetections = [...allDetections];
-            currentPage = 1;
-            updateStatistics();
-            renderTable();
-            showNotification('Filtres supprimés', 'info');
+        function exportData(format) {
+            historyManager.exportData(format);
         }
 
-        async function refreshHistory() {
-            const refreshBtn = document.querySelector('[onclick="refreshHistory()"]');
-            const originalHTML = refreshBtn.innerHTML;
-            
-            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualisation...';
-            refreshBtn.disabled = true;
-            
-            try {
-                await loadHistory();
-                showNotification('Historique actualisé', 'success');
-            } finally {
-                refreshBtn.innerHTML = originalHTML;
-                refreshBtn.disabled = false;
-            }
+        function deleteRecord(id) {
+            historyManager.deleteRecord(id);
         }
 
-        async function handleAddObject(event) {
-            event.preventDefault();
+        function confirmResetDatabase() {
+            const confirmation = prompt('⚠️ ATTENTION: Cette action est IRRÉVERSIBLE!\n\nTapez "SUPPRIMER TOUT" pour confirmer:');
             
-            const gId = document.getElementById('newGId').value.trim();
-            const type = document.getElementById('newObjectType').value;
-            const color = document.getElementById('newObjectColor').value;
-            
-            if (!gId || !type || !color) {
-                showNotification('Tous les champs sont requis', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/detection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        g_id: gId,
-                        object_type: type,
-                        color: color
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    showNotification('Objet ajouté avec succès', 'success');
-                    closeModal('addObjectModal');
-                    document.getElementById('addObjectForm').reset();
-                    await loadHistory();
-                } else {
-                    showNotification(result.message, 'error');
+            if (confirmation === 'SUPPRIMER TOUT') {
+                const doubleConfirm = confirm('Êtes-vous ABSOLUMENT certain de vouloir supprimer toutes les données ?');
+                if (doubleConfirm) {
+                    historyManager.resetDatabase();
                 }
-            } catch (error) {
-                console.error('Erreur:', error);
-                showNotification('Erreur lors de l\'ajout', 'error');
-            }
-        }
-
-        async function handleDownload(event) {
-            event.preventDefault();
-            
-            const fromDate = document.getElementById('downloadFromDate').value;
-            const toDate = document.getElementById('downloadToDate').value;
-            const format = document.getElementById('downloadFormat').value;
-            
-            if (!fromDate || !toDate) {
-                showNotification('Les dates sont requises', 'error');
-                return;
-            }
-
-            try {
-                const params = new URLSearchParams({
-                    from_date: fromDate,
-                    to_date: toDate
-                });
-
-                const response = await fetch(`/api/download?${params}`);
-                const text = await response.text();
-                
-                if (response.ok) {
-                    downloadFile(text, `historique_${fromDate}_${toDate}.${format}`);
-                    showNotification('Téléchargement démarré', 'success');
-                    closeModal('downloadModal');
-                } else {
-                    showNotification('Erreur lors du téléchargement', 'error');
-                }
-            } catch (error) {
-                console.error('Erreur:', error);
-                showNotification('Erreur de téléchargement', 'error');
-            }
-        }
-
-        function downloadFile(content, filename) {
-            const blob = new Blob([content], { type: 'text/plain' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        }
-
-        function showDownloadModal() {
-            document.getElementById('downloadModal').style.display = 'block';
-        }
-
-        function showAddObjectModal() {
-            document.getElementById('addObjectModal').style.display = 'block';
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-
-        function viewDetails(gId) {
-            const detection = allDetections.find(d => d.g_id === gId);
-            if (detection) {
-                alert(`Détails de ${gId}:\n\nType: ${detection.type}\nCouleur: ${getColorName(detection.color)}\nCompteur: ${detection.ref_count || 1}\nDate: ${formatDateTime(detection.datetime)}`);
-            }
-        }
-
-        function deleteDetection(gId) {
-            if (!isAdmin) {
-                showNotification('Accès refusé: fonctionnalité réservée aux administrateurs', 'error');
-                return;
-            }
-
-            const confirmed = confirm(`Êtes-vous sûr de vouloir supprimer la détection ${gId} ?\n\nCette action ne peut pas être annulée.`);
-            
-            if (confirmed) {
-                // Ici, vous pourriez implémenter une vraie suppression via API
-                showNotification('Suppression non implémentée dans cette version', 'warning');
             }
         }
 
         function logout() {
-            const confirmed = confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
-            
-            if (confirmed) {
-                localStorage.removeItem('sessionToken');
-                localStorage.removeItem('username');
-                showNotification('Déconnexion réussie', 'success');
-                
-                setTimeout(() => {
-                    window.location.href = 'login.html';
-                }, 1000);
-            }
+            sessionStorage.clear();
+            window.location.href = 'login.html';
         }
 
-        // Fonctions utilitaires
-        function getColorClass(color) {
-            const colorMap = {
-                'red': 'red',
-                'green': 'green', 
-                'blue': 'blue'
-            };
-            return colorMap[color] || 'gray';
-        }
-
-        function getColorName(color) {
-            const colorMap = {
-                'red': 'Rouge',
-                'green': 'Vert',
-                'blue': 'Bleu'
-            };
-            return colorMap[color] || color;
-        }
-
-        function formatDateTime(datetime) {
-            try {
-                const date = new Date(datetime);
-                return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR');
-            } catch (e) {
-                return datetime;
-            }
-        }
-
-        function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.innerHTML = `
-                <i class="fas ${type === 'success' ? 'fa-check' : type === 'error' ? 'fa-times' : 'fa-info'}"></i>
-                ${message}
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => notification.classList.add('show'), 100);
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => document.body.removeChild(notification), 300);
-            }, 3000);
-        }
-
-        // Vérification périodique de la session
-        setInterval(() => {
-            const sessionToken = localStorage.getItem('sessionToken');
-            if (!sessionToken) {
-                showNotification('Session expirée, redirection vers la connexion...', 'warning');
-                setTimeout(() => {
-                    window.location.href = 'login.html';
-                }, 2000);
-            }
-        }, 300000); // Vérification toutes les 5 minutes
-
-        // Raccourcis clavier pour admin
-        document.addEventListener('keydown', function(event) {
-            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
-            
-            // Ctrl+R pour reset (admin seulement)
-            if (event.ctrlKey && event.key === 'r' && isAdmin) {
-                event.preventDefault();
-                showResetConfirmation();
-            }
-            
-            // F5 pour refresh
-            if (event.key === 'F5') {
-                event.preventDefault();
-                refreshHistory();
-            }
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', () => {
+            historyManager = new HistoryManager();
         });
-
-        // Log de démarrage
-        console.log('📋 Page historique initialisée');
-        if (isAdmin) {
-            console.log('👑 Mode administrateur activé');
-            console.log('💡 Raccourcis admin: Ctrl+R=Reset, F5=Refresh');
-        } else {
-            console.log('👤 Mode utilisateur standard');
-        }
     </script>
 </body>
 </html>
