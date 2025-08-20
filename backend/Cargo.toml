@@ -4,40 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Framework web async
 axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "cors"] }
-
-# Sérialisation JSON
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-# Base de données SQLite
-rusqlite = { version = "0.31", features = ["bundled"] }
-
-# Gestion des dates
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
-
-# Authentification JWT
-jsonwebtoken = "9.2"
-sha2 = "0.10"
-
-# Logging
-env_logger = "0.10"
-log = "0.4"
-
-# HTTP client (pour les tests)
-reqwest = { version = "0.11", features = ["json"], optional = true }
-
-[dev-dependencies]
-reqwest = { version = "0.11", features = ["json"] }
-
-[features]
-default = []
-testing = ["reqwest"]
-
-[[bin]]
-name = "detection_backend"
-path = "src/main.rs"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = "0.3"

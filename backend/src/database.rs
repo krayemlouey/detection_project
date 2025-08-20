@@ -1,243 +1,230 @@
 use sqlx::sqlite::SqlitePool;
 use sqlx::Row;
-use serde_json::{json, Value};
-use chrono::Local;
-use std::fs;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-/// Initialise la connexion à la base de données SQLite et crée les tables si nécessaire
-pub async fn init_database() -> Result<SqlitePool, sqlx::Error> {
-    // Créer le répertoire de base de données s'il n'existe pas
-    std::fs::create_dir_all("./data").map_err(|e| {
-        eprintln!("❌ Erreur création répertoire: {}", e);
-        sqlx::Error::Io(e)
+// Fonction pour créer la base de données et les tables
+pub async fn create_database() -> Result<SqlitePool, sqlx::Error> {
+    // Créer le répertoire data s'il n'existe pas
+    std::fs::create_dir_all("data").map_err(|e| {
+        sqlx::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to create data directory: {}", e)
+        ))
     })?;
     
-    let database_url = "sqlite:./data/detection.db";
-    
-    println!("📊 Connexion à la base de données SQLite...");
-    println!("📁 Chemin de la base: {}", database_url);
-    
-    let pool = SqlitePool::connect(database_url).await.map_err(|e| {
-        eprintln!("❌ Erreur connexion base de données: {}", e);
-        eprintln!("💡 Vérifiez les permissions d'écriture dans le répertoire");
-        e
-    })?;
+    let pool = SqlitePool::connect("sqlite:data/detection.db").await?;
 
-    create_tables(&pool).await?;
+    // Créer les tables si elles n'existent pas
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS detection_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            g_id TEXT NOT NULL,
+            request_id TEXT NOT NULL UNIQUE,
+            image_data TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'pending'
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await?;
 
-    println!("✅ Base de données initialisée avec succès");
-    Ok(pool)
-}
-
-/// Crée les tables nécessaires dans la base de données
-async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    // Table des détections individuelles
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS detections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id TEXT NOT NULL,
             g_id TEXT NOT NULL,
-            ref_count INTEGER NOT NULL DEFAULT 1,
-            type TEXT NOT NULL,
-            color TEXT NOT NULL,
-            datetime TEXT NOT NULL,
-            UNIQUE(g_id)
+            detected_objects TEXT NOT NULL,
+            confidence_scores TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (request_id) REFERENCES detection_requests (request_id)
         )
         "#,
     )
-    .execute(pool)
+    .execute(&pool)
     .await?;
 
-    // Table des statistiques journalières
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS daily_stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            g_id TEXT NOT NULL,
-            type TEXT NOT NULL,
-            cadence INTEGER NOT NULL DEFAULT 0,
-            day TEXT NOT NULL,
-            UNIQUE(g_id, day)
+    Ok(pool)
+}
+
+// Structure pour les requêtes de détection
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DetectionRequest {
+    pub id: Option<i64>,
+    pub g_id: String,
+    pub request_id: String,
+    pub image_data: String,
+    pub timestamp: Option<String>,
+    pub status: Option<String>,
+}
+
+// Structure pour les résultats de détection
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Detection {
+    pub id: Option<i64>,
+    pub request_id: String,
+    pub g_id: String,
+    pub detected_objects: String,
+    pub confidence_scores: String,
+    pub timestamp: Option<String>,
+}
+
+// Structure pour les statistiques
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DetectionStats {
+    pub today_count: i64,
+    pub total_count: i64,
+    pub recent_detections: Vec<Value>,
+}
+
+// Structure principale pour la base de données
+#[derive(Clone)]
+pub struct Database {
+    pub pool: SqlitePool,
+}
+
+impl Database {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+
+    // Insérer une nouvelle requête de détection
+    pub async fn insert_detection_request(
+        &self,
+        g_id: &str,
+        request_id: &str,
+        image_data: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO detection_requests (g_id, request_id, image_data) VALUES (?, ?, ?)"
         )
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    println!("📋 Tables créées/vérifiées");
-    Ok(())
-}
-
-/// Insère une nouvelle détection ou met à jour si elle existe déjà 
-pub async fn insert_detection(
-    pool: &SqlitePool,
-    g_id: &str,
-    object_type: &str,
-    color: &str,
-) -> Result<(), sqlx::Error> {
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let today = Local::now().format("%Y-%m-%d").to_string();
-
-    let mut tx = pool.begin().await?;
-
-    // Insert/update détection
-    sqlx::query(
-        r#"
-        INSERT INTO detections (g_id, ref_count, type, color, datetime)
-        VALUES (?, 1, ?, ?, ?)
-        ON CONFLICT(g_id) DO UPDATE SET
-            ref_count = ref_count + 1,
-            datetime = excluded.datetime
-        "#,
-    )
-    .bind(g_id)
-    .bind(object_type)
-    .bind(color)
-    .bind(&now)
-    .execute(&mut *tx)
-    .await?;
-
-    // Insert/update statistiques journalières
-    sqlx::query(
-        r#"
-        INSERT INTO daily_stats (g_id, type, cadence, day)
-        VALUES (?, ?, 1, ?)
-        ON CONFLICT(g_id, day) DO UPDATE SET
-            cadence = cadence + 1
-        "#,
-    )
-    .bind(g_id)
-    .bind(object_type)
-    .bind(&today)
-    .execute(&mut *tx)
-    .await?;
-
-    tx.commit().await?;
-
-    println!("🔍 Détection ajoutée: {} ({}) - {}", g_id, object_type, color);
-    Ok(())
-}
-
-/// Récupère les détections avec filtres optionnels sur la date
-pub async fn get_detections(
-    pool: &SqlitePool,
-    from_date: Option<String>,
-    to_date: Option<String>,
-) -> Result<Vec<Value>, sqlx::Error> {
-    let rows = match (&from_date, &to_date) {
-        (Some(from), Some(to)) => {
-            sqlx::query("SELECT g_id, ref_count, type, color, datetime FROM detections WHERE date(datetime) >= ? AND date(datetime) <= ? ORDER BY datetime DESC")
-                .bind(from)
-                .bind(to)
-                .fetch_all(pool)
-                .await?
-        }
-        (Some(from), None) => {
-            sqlx::query("SELECT g_id, ref_count, type, color, datetime FROM detections WHERE date(datetime) >= ? ORDER BY datetime DESC")
-                .bind(from)
-                .fetch_all(pool)
-                .await?
-        }
-        (None, Some(to)) => {
-            sqlx::query("SELECT g_id, ref_count, type, color, datetime FROM detections WHERE date(datetime) <= ? ORDER BY datetime DESC")
-                .bind(to)
-                .fetch_all(pool)
-                .await?
-        }
-        (None, None) => {
-            sqlx::query("SELECT g_id, ref_count, type, color, datetime FROM detections ORDER BY datetime DESC")
-                .fetch_all(pool)
-                .await?
-        }
-    };
-
-    let detections: Vec<Value> = rows
-        .into_iter()
-        .map(|row| {
-            json!({
-                "g_id": row.get::<String, _>("g_id"),
-                "ref_count": row.get::<i64, _>("ref_count"),
-                "type": row.get::<String, _>("type"),
-                "color": row.get::<String, _>("color"),
-                "datetime": row.get::<String, _>("datetime")
-            })
-        })
-        .collect();
-
-    Ok(detections)
-}
-
-/// Récupère les statistiques journalières et récentes
-pub async fn get_daily_stats(pool: &SqlitePool) -> Result<Value, sqlx::Error> {
-    let today = Local::now().format("%Y-%m-%d").to_string();
-
-    let today_stats = sqlx::query(
-        "SELECT type, SUM(cadence) as total FROM daily_stats WHERE day = ? GROUP BY type"
-    )
-    .bind(&today)
-    .fetch_all(pool)
-    .await?;
-
-    let total_stats = sqlx::query(
-        "SELECT type, SUM(cadence) as total FROM daily_stats GROUP BY type"
-    )
-    .fetch_all(pool)
-    .await?;
-
-    let recent_detections = sqlx::query(
-        "SELECT g_id, type, color, datetime FROM detections ORDER BY datetime DESC LIMIT 10"
-    )
-    .fetch_all(pool)
-    .await?;
-
-    let today_data: Vec<Value> = today_stats
-        .into_iter()
-        .map(|row| json!({
-            "type": row.get::<String, _>("type"),
-            "count": row.get::<i64, _>("total")
-        }))
-        .collect();
-
-    let total_data: Vec<Value> = total_stats
-        .into_iter()
-        .map(|row| json!({
-            "type": row.get::<String, _>("type"),
-            "count": row.get::<i64, _>("total")
-        }))
-        .collect();
-
-    let recent_data: Vec<Value> = recent_detections
-        .into_iter()
-        .map(|row| json!({
-            "g_id": row.get::<String, _>("g_id"),
-            "type": row.get::<String, _>("type"),
-            "color": row.get::<String, _>("color"),
-            "datetime": row.get::<String, _>("datetime")
-        }))
-        .collect();
-
-    Ok(json!({
-        "today": today_data,
-        "total": total_data,
-        "recent": recent_data,
-        "last_updated": Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
-    }))
-}
-
-/// Supprime les anciennes statistiques (maintenance)
-#[allow(dead_code)]
-pub async fn cleanup_old_data(pool: &SqlitePool, days_to_keep: i64) -> Result<(), sqlx::Error> {
-    let cutoff_date = Local::now()
-        .checked_sub_signed(chrono::Duration::days(days_to_keep))
-        .unwrap()
-        .format("%Y-%m-%d")
-        .to_string();
-
-    let deleted = sqlx::query("DELETE FROM daily_stats WHERE day < ?")
-        .bind(&cutoff_date)
-        .execute(pool)
+        .bind(g_id)
+        .bind(request_id)
+        .bind(image_data)
+        .execute(&self.pool)
         .await?;
 
-    println!("🧹 Nettoyage: {} entrées supprimées", deleted.rows_affected());
-    Ok(())
+        Ok(())
+    }
+
+    // Insérer un résultat de détection
+    pub async fn insert_detection(
+        &self,
+        request_id: &str,
+        g_id: &str,
+        detected_objects: &str,
+        confidence_scores: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO detections (request_id, g_id, detected_objects, confidence_scores) VALUES (?, ?, ?, ?)"
+        )
+        .bind(request_id)
+        .bind(g_id)
+        .bind(detected_objects)
+        .bind(confidence_scores)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    // Récupérer les détections par g_id
+    pub async fn get_detections_by_gid(
+        &self,
+        g_id: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<Value>, sqlx::Error> {
+        let limit = limit.unwrap_or(50);
+
+        let query = "SELECT g_id, request_id, detected_objects, confidence_scores, timestamp FROM detections WHERE g_id = ? ORDER BY timestamp DESC LIMIT ?";
+        let rows = sqlx::query(query)
+            .bind(g_id)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut detections = Vec::new();
+        for row in rows {
+            let detection = serde_json::json!({
+                "g_id": row.get::<String, _>("g_id"),
+                "request_id": row.get::<String, _>("request_id"),
+                "detected_objects": row.get::<String, _>("detected_objects"),
+                "confidence_scores": row.get::<String, _>("confidence_scores"),
+                "timestamp": row.get::<String, _>("timestamp"),
+            });
+            detections.push(detection);
+        }
+
+        Ok(detections)
+    }
+
+    // Récupérer les statistiques de détection
+    pub async fn get_detection_stats(&self, g_id: &str) -> Result<Value, sqlx::Error> {
+        // Statistiques d'aujourd'hui
+        let today_stats = sqlx::query(
+            "SELECT COUNT(*) as count FROM detections WHERE g_id = ? AND DATE(timestamp) = DATE('now')"
+        )
+        .bind(g_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Statistiques totales
+        let total_stats = sqlx::query(
+            "SELECT COUNT(*) as count FROM detections WHERE g_id = ?"
+        )
+        .bind(g_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Détections récentes
+        let recent_detections = sqlx::query(
+            "SELECT request_id, detected_objects, confidence_scores, timestamp 
+             FROM detections 
+             WHERE g_id = ? 
+             ORDER BY timestamp DESC 
+             LIMIT 5"
+        )
+        .bind(g_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut recent_vec = Vec::new();
+        for row in recent_detections {
+            let detection = serde_json::json!({
+                "request_id": row.get::<String, _>("request_id"),
+                "detected_objects": row.get::<String, _>("detected_objects"),
+                "confidence_scores": row.get::<String, _>("confidence_scores"),
+                "timestamp": row.get::<String, _>("timestamp"),
+            });
+            recent_vec.push(detection);
+        }
+
+        let stats = serde_json::json!({
+            "today_count": today_stats.get::<i64, _>("count"),
+            "total_count": total_stats.get::<i64, _>("count"),
+            "recent_detections": recent_vec
+        });
+
+        Ok(stats)
+    }
+
+    // Supprimer les anciennes détections (plus de 30 jours)
+    #[allow(dead_code)]
+    pub async fn cleanup_old_detections(&self) -> Result<(), sqlx::Error> {
+        // Supprimer les détections de plus de 30 jours
+        let deleted = sqlx::query("DELETE FROM detections WHERE timestamp < DATE('now', '-30 days')")
+            .execute(&self.pool)
+            .await?;
+
+        // Supprimer les requêtes de détection correspondantes
+        sqlx::query("DELETE FROM detection_requests WHERE timestamp < DATE('now', '-30 days')")
+            .execute(&self.pool)
+            .await?;
+
+        tracing::info!("Supprimé {} anciennes détections", deleted.rows_affected());
+        Ok(())
+    }
 }

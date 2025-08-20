@@ -1,0 +1,2 @@
+fn(axum::extract::State<database::Database>, axum::Json<DetectionRequestPayload>) -> impl std::future::Future<Output = Response<Body>> {detect_objects}
+fn(axum::extract::State<database::Database>, axum::Json<DetectionRequestPayload>) -> impl std::future::Future<Output = Response<Body>> {detect_objects}: Handler<_, _>

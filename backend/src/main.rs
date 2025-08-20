@@ -1,355 +1,198 @@
+mod database;
+
 use axum::{
-    extract::{Query, State},
-    http::{HeaderMap, StatusCode},
-    response::{Html, Json},
-    routing::{get, post, delete},
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::{Json, IntoResponse, Response},
+    routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
-use tokio::net::TcpListener;
-use tower::ServiceBuilder;
-use tower_http::{
-    cors::{Any, CorsLayer},
-    services::ServeDir,
-};
+use serde_json::json;
+use tower_http::cors::CorsLayer;
+use uuid::Uuid;
 
-mod auth;
-mod database;
+use database::Database;
 
-use database::{Database, DetectionRequest, Detection, DetectionStats};
-
-#[derive(Clone)]
-struct AppState {
-    db: Arc<Database>,
+#[derive(Debug, Deserialize)]
+struct DetectionRequestPayload {
+    g_id: String,
+    image_data: String, // Base64 encoded image
 }
 
-#[derive(Deserialize)]
-struct DateRangeQuery {
-    start_date: Option<String>,
-    end_date: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct FilterQuery {
-    color: Option<String>,
-    object_type: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct StatsQuery {
-    period: Option<String>,
-}
-
-#[derive(Serialize)]
-struct ApiResponse<T> {
-    success: bool,
-    data: Option<T>,
+#[derive(Debug, Serialize)]
+struct DetectionResponse {
+    request_id: String,
+    status: String,
     message: String,
+    detected_objects: Option<Vec<DetectedObject>>,
 }
 
-impl<T> ApiResponse<T> {
-    fn success(data: T) -> Self {
-        Self {
-            success: true,
-            data: Some(data),
-            message: "Success".to_string(),
-        }
+#[derive(Debug, Serialize, Deserialize)]
+struct DetectedObject {
+    class: String,
+    confidence: f32,
+    bbox: Option<Vec<f32>>, // [x, y, width, height]
+}
+
+#[derive(Debug, Deserialize)]
+struct HistoryQuery {
+    limit: Option<i64>,
+}
+
+// Endpoint pour effectuer une détection d'objets
+async fn detect_objects(
+    State(db): State<Database>,
+    Json(payload): Json<DetectionRequestPayload>,
+) -> Response {
+    let request_id = Uuid::new_v4().to_string();
+    
+    // Sauvegarder la requête dans la base de données
+    if let Err(e) = db.insert_detection_request(
+        &payload.g_id,
+        &request_id,
+        &payload.image_data,
+    ).await {
+        tracing::error!("Erreur lors de l'insertion de la requête: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Erreur lors de la sauvegarde de la requête"}))
+        ).into_response();
     }
 
-    fn error(message: &str) -> Self {
-        Self {
-            success: false,
-            data: None,
-            message: message.to_string(),
+    // Simuler la détection d'objets (remplacez par votre logique de détection)
+    let detected_objects = simulate_object_detection(&payload.image_data).await;
+    
+    match detected_objects {
+        Ok(objects) => {
+            // Convertir les objets détectés en JSON pour la sauvegarde
+            let objects_json = serde_json::to_string(&objects).unwrap_or_default();
+            let confidence_scores = objects.iter()
+                .map(|obj| obj.confidence.to_string())
+                .collect::<Vec<String>>()
+                .join(",");
+
+            // Sauvegarder les résultats dans la base de données
+            if let Err(e) = db.insert_detection(
+                &request_id,
+                &payload.g_id,
+                &objects_json,
+                &confidence_scores,
+            ).await {
+                tracing::error!("Erreur lors de l'insertion des résultats: {}", e);
+            }
+
+            Json(DetectionResponse {
+                request_id,
+                status: "success".to_string(),
+                message: format!("{} objets détectés", objects.len()),
+                detected_objects: Some(objects),
+            }).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Erreur lors de la détection: {}", e);
+            Json(DetectionResponse {
+                request_id,
+                status: "error".to_string(),
+                message: "Erreur lors de la détection d'objets".to_string(),
+                detected_objects: None,
+            }).into_response()
         }
     }
+}
+
+// Simuler la détection d'objets (remplacez par votre modèle de détection)
+async fn simulate_object_detection(image_data: &str) -> Result<Vec<DetectedObject>, Box<dyn std::error::Error>> {
+    // Décoder l'image base64 avec la nouvelle API
+    use base64::prelude::*;
+    let _image_bytes = BASE64_STANDARD.decode(image_data)?;
+    
+    // Simuler des objets détectés
+    let objects = vec![
+        DetectedObject {
+            class: "person".to_string(),
+            confidence: 0.95,
+            bbox: Some(vec![100.0, 50.0, 200.0, 300.0]),
+        },
+        DetectedObject {
+            class: "car".to_string(),
+            confidence: 0.87,
+            bbox: Some(vec![300.0, 200.0, 150.0, 100.0]),
+        },
+    ];
+
+    Ok(objects)
+}
+
+// Endpoint pour récupérer l'historique des détections
+async fn get_detection_history(
+    Path(g_id): Path<String>,
+    Query(query): Query<HistoryQuery>,
+    State(db): State<Database>,
+) -> Response {
+    match db.get_detections_by_gid(&g_id, query.limit).await {
+        Ok(detections) => Json(json!({
+            "g_id": g_id,
+            "detections": detections
+        })).into_response(),
+        Err(e) => {
+            tracing::error!("Erreur lors de la récupération de l'historique: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Erreur lors de la récupération de l'historique"}))
+            ).into_response()
+        }
+    }
+}
+
+// Endpoint pour récupérer les statistiques
+async fn get_stats(
+    Path(g_id): Path<String>,
+    State(db): State<Database>,
+) -> Response {
+    match db.get_detection_stats(&g_id).await {
+        Ok(stats) => Json(stats).into_response(),
+        Err(e) => {
+            tracing::error!("Erreur lors de la récupération des statistiques: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Erreur lors de la récupération des statistiques"}))
+            ).into_response()
+        }
+    }
+}
+
+// Endpoint de santé
+async fn health_check() -> Json<serde_json::Value> {
+    Json(json!({
+        "status": "healthy",
+        "message": "Detection Backend API is running"
+    }))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialiser les logs
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     // Initialiser la base de données
-    let db = Arc::new(Database::new().expect("Failed to initialize database"));
+    let pool = database::create_database().await?;
+    let db = Database::new(pool);
 
-    let app_state = AppState { db };
+    tracing::info!("🚀 Serveur de détection démarré sur http://127.0.0.1:8080");
 
-    // Configuration CORS
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    // Routes de l'API
-    let api_routes = Router::new()
-        .route("/detections", post(add_detection))
-        .route("/detections", get(get_detections))
-        .route("/detections/stats", get(get_detection_stats))
-        .route("/detections/export", get(export_detections))
-        .route("/detections/:id", delete(delete_detection))
-        .route("/detections/clear", delete(clear_detections))
-        .route("/auth/login", post(auth::login))
-        .route("/auth/verify", post(auth::verify_token))
-        .route("/health", get(health_check));
-
-    // Routes principales
+    // Créer l'application Axum
     let app = Router::new()
-        .nest("/api", api_routes)
-        .route("/", get(serve_index))
-        .route("/login", get(serve_login))
-        .route("/history", get(serve_history))
-        .fallback_service(ServeDir::new("frontend"))
-        .layer(ServiceBuilder::new().layer(cors))
-        .with_state(app_state);
+        .route("/health", get(health_check))
+        .route("/detect", post(detect_objects))
+        .route("/history/:g_id", get(get_detection_history))
+        .route("/stats/:g_id", get(get_stats))
+        .layer(CorsLayer::permissive())
+        .with_state(db);
 
     // Démarrer le serveur
-    let listener = TcpListener::bind("0.0.0.0:3000").await?;
-    println!("🚀 Serveur de détection démarré sur http://localhost:3000");
-    println!("📊 Dashboard: http://localhost:3000");
-    println!("🔐 Connexion: http://localhost:3000/login");
-    println!("📋 Historique: http://localhost:3000/history");
-    
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
     axum::serve(listener, app).await?;
 
     Ok(())
-}
-
-// Route pour servir la page d'accueil
-async fn serve_index() -> Html<&'static str> {
-    Html(include_str!("../../frontend/index.html"))
-}
-
-// Route pour servir la page de connexion
-async fn serve_login() -> Html<&'static str> {
-    Html(include_str!("../../frontend/login.html"))
-}
-
-// Route pour servir la page d'historique
-async fn serve_history() -> Html<&'static str> {
-    Html(include_str!("../../frontend/history.html"))
-}
-
-// Route de vérification de santé
-async fn health_check() -> Json<ApiResponse<&'static str>> {
-    Json(ApiResponse::success("Service is running"))
-}
-
-// Ajouter une détection
-async fn add_detection(
-    State(state): State<AppState>,
-    Json(request): Json<DetectionRequest>,
-) -> Result<Json<ApiResponse<Detection>>, (StatusCode, Json<ApiResponse<Detection>>)> {
-    println!("🔍 Nouvelle détection: {} - {} - {}", request.g_id, request.object_type, request.color);
-
-    match state.db.add_detection(&request) {
-        Ok(detection) => {
-            println!("✅ Détection ajoutée: ID={}, Ref={}", 
-                detection.g_id, detection.ref_count);
-            Ok(Json(ApiResponse::success(detection)))
-        }
-        Err(e) => {
-            eprintln!("❌ Erreur lors de l'ajout: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(&format!("Database error: {}", e))),
-            ))
-        }
-    }
-}
-
-// Récupérer les détections
-async fn get_detections(
-    State(state): State<AppState>,
-    Query(date_query): Query<DateRangeQuery>,
-    Query(filter_query): Query<FilterQuery>,
-    headers: HeaderMap,
-) -> Result<Json<ApiResponse<Vec<Detection>>>, (StatusCode, Json<ApiResponse<Vec<Detection>>>)> {
-    
-    // Vérifier l'authentification pour les requêtes d'historique
-    if let Some(auth_header) = headers.get("authorization") {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..];
-                if !auth::verify_jwt_token(token) {
-                    return Err((
-                        StatusCode::UNAUTHORIZED,
-                        Json(ApiResponse::error("Invalid or expired token")),
-                    ));
-                }
-            }
-        }
-    }
-
-    let detections = if let (Some(start), Some(end)) = (date_query.start_date, date_query.end_date) {
-        state.db.get_detections_by_date_range(&start, &end)
-    } else if filter_query.color.is_some() || filter_query.object_type.is_some() {
-        state.db.get_detections_by_filter(
-            filter_query.color.as_deref(),
-            filter_query.object_type.as_deref(),
-        )
-    } else {
-        state.db.get_all_detections()
-    };
-
-    match detections {
-        Ok(detections) => {
-            println!("📊 Récupération de {} détections", detections.len());
-            Ok(Json(ApiResponse::success(detections)))
-        }
-        Err(e) => {
-            eprintln!("❌ Erreur lors de la récupération: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(&format!("Database error: {}", e))),
-            ))
-        }
-    }
-}
-
-// Récupérer les statistiques
-async fn get_detection_stats(
-    State(state): State<AppState>,
-    Query(query): Query<StatsQuery>,
-) -> Result<Json<ApiResponse<DetectionStats>>, (StatusCode, Json<ApiResponse<DetectionStats>>)> {
-    match state.db.get_stats() {
-        Ok(stats) => {
-            println!("📈 Stats générées: {} total, {} aujourd'hui", 
-                stats.total_detections, stats.daily_count);
-            Ok(Json(ApiResponse::success(stats)))
-        }
-        Err(e) => {
-            eprintln!("❌ Erreur lors du calcul des stats: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(&format!("Database error: {}", e))),
-            ))
-        }
-    }
-}
-
-// Exporter les détections
-async fn export_detections(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<String, (StatusCode, Json<ApiResponse<String>>)> {
-    // Vérification d'authentification
-    if let Some(auth_header) = headers.get("authorization") {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..];
-                if !auth::verify_jwt_token(token) {
-                    return Err((
-                        StatusCode::UNAUTHORIZED,
-                        Json(ApiResponse::error("Invalid or expired token")),
-                    ));
-                }
-            }
-        }
-    } else {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::error("Authorization token required")),
-        ));
-    }
-
-    match state.db.export_detections_csv() {
-        Ok(csv_content) => {
-            println!("📁 Export CSV généré avec succès");
-            Ok(csv_content)
-        }
-        Err(e) => {
-            eprintln!("❌ Erreur lors de l'export: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(&format!("Export error: {}", e))),
-            ))
-        }
-    }
-}
-
-// Supprimer une détection
-async fn delete_detection(
-    State(state): State<AppState>,
-    axum::extract::Path(id): axum::extract::Path<i64>,
-    headers: HeaderMap,
-) -> Result<Json<ApiResponse<bool>>, (StatusCode, Json<ApiResponse<bool>>)> {
-    // Vérification d'authentification
-    if let Some(auth_header) = headers.get("authorization") {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..];
-                if !auth::verify_jwt_token(token) {
-                    return Err((
-                        StatusCode::UNAUTHORIZED,
-                        Json(ApiResponse::error("Invalid or expired token")),
-                    ));
-                }
-            }
-        }
-    } else {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::error("Authorization token required")),
-        ));
-    }
-
-    match state.db.delete_detection(id) {
-        Ok(deleted) => {
-            if deleted {
-                println!("🗑️ Détection {} supprimée", id);
-                Ok(Json(ApiResponse::success(true)))
-            } else {
-                Ok(Json(ApiResponse::error("Detection not found")))
-            }
-        }
-        Err(e) => {
-            eprintln!("❌ Erreur lors de la suppression: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(&format!("Database error: {}", e))),
-            ))
-        }
-    }
-}
-
-// Vider toutes les détections
-async fn clear_detections(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<Json<ApiResponse<&'static str>>, (StatusCode, Json<ApiResponse<&'static str>>)> {
-    // Vérification d'authentification
-    if let Some(auth_header) = headers.get("authorization") {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..];
-                if !auth::verify_jwt_token(token) {
-                    return Err((
-                        StatusCode::UNAUTHORIZED,
-                        Json(ApiResponse::error("Invalid or expired token")),
-                    ));
-                }
-            }
-        }
-    } else {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::error("Authorization token required")),
-        ));
-    }
-
-    match state.db.clear_all_detections() {
-        Ok(_) => {
-            println!("🧹 Toutes les détections ont été supprimées");
-            Ok(Json(ApiResponse::success("All detections cleared")))
-        }
-        Err(e) => {
-            eprintln!("❌ Erreur lors du vidage: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(&format!("Database error: {}", e))),
-            ))
-        }
-    }
 }
