@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Système de Détection IoT</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header du Dashboard -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <h1><i class="fas fa-tachometer-alt"></i> Dashboard IoT</h1>
+                <p class="dashboard-subtitle">Système de Détection d'Objets en Temps Réel</p>
+            </div>
+            <div class="header-controls">
+                <div id="statusIndicator" class="status-indicator">
+                    <i class="fas fa-circle"></i> Déconnecté
+                </div>
+                <button id="historyBtn" class="btn btn-secondary">
+                    <i class="fas fa-history"></i> Historique
+                </button>
+                <button onclick="logout()" class="btn btn-danger">
+                    <i class="fas fa-sign-out-alt"></i> Déconnexion
+                </button>
+            </div>
+        </header>
+
+        <!-- Grille principale du dashboard -->
+        <div class="dashboard-grid">
+            <!-- Section Caméra -->
+            <div class="dashboard-card camera-section">
+                <div class="card-header">
+                    <h3><i class="fas fa-video"></i> Flux Caméra</h3>
+                    <div class="card-controls">
+                        <button id="startCameraBtn" class="btn btn-success">
+                            <i class="fas fa-play"></i> Démarrer
+                        </button>
+                        <button id="stopCameraBtn" class="btn btn-danger" disabled>
+                            <i class="fas fa-stop"></i> Arrêter
+                        </button>
+                        <button id="captureBtn" class="btn btn-info" disabled>
+                            <i class="fas fa-camera"></i> Capture
+                        </button>
+                    </div>
+                </div>
+                <div class="camera-container">
+                    <video id="cameraFeed" autoplay muted></video>
+                    <canvas id="detectionOverlay"></canvas>
+                    <div class="camera-info">
+                        <div class="fps-counter">
+                            FPS: <span id="fpsDisplay">0</span>
+                        </div>
+                        <div class="detection-info">
+                            Statut: <span id="detectionStatus">Arrêtée</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Compteurs -->
+            <div class="dashboard-card counters-section">
+                <div class="card-header">
+                    <h3><i class="fas fa-chart-bar"></i> Compteurs</h3>
+                    <div class="card-controls">
+                        <button id="resetCountersBtn" class="btn btn-warning">
+                            <i class="fas fa-redo"></i> Reset
+                        </button>
+                    </div>
+                </div>
+                <div class="counters-container">
+                    <div class="counter-item">
+                        <div class="counter-icon red">
+                            <i class="fas fa-microchip"></i>
+                        </div>
+                        <div class="counter-info">
+                            <h4>Cartes Microchip</h4>
+                            <div class="counter-value" id="redCounter">0</div>
+                            <div class="counter-rate">Rouge</div>
+                        </div>
+                    </div>
+                    
+                    <div class="counter-item">
+                        <div class="counter-icon green">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <div class="counter-info">
+                            <h4>Cartes Personnalisées</h4>
+                            <div class="counter-value" id="greenCounter">0</div>
+                            <div class="counter-rate">Vert</div>
+                        </div>
+                    </div>
+                    
+                    <div class="counter-item">
+                        <div class="counter-icon blue">
+                            <i class="fas fa-microchip"></i>
+                        </div>
+                        <div class="counter-info">
+                            <h4>STM32</h4>
+                            <div class="counter-value" id="blueCounter">0</div>
+                            <div class="counter-rate">Bleu</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Capture -->
+            <div class="dashboard-card capture-section">
+                <div class="card-header">
+                    <h3><i class="fas fa-camera"></i> Dernière Capture</h3>
+                </div>
+                <div class="capture-container">
+                    <canvas id="captureCanvas"></canvas>
+                    <div class="capture-info" id="captureInfo">
+                        Aucune capture effectuée
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section Aperçu -->
+            <div class="dashboard-card preview-section">
+                <div class="card-header">
+                    <h3><i class="fas fa-list"></i> Détections Récentes</h3>
+                    <div class="card-controls">
+                        <button id="refreshPreviewBtn" class="btn btn-info">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                        <button id="addObjectBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Ajouter
+                        </button>
+                    </div>
+                </div>
+                <div class="preview-container">
+                    <div id="recentList" class="recent-list">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin loading-icon"></i>
+                            Chargement...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contrôles de configuration -->
+        <div class="controls-section">
+            <div class="control-group">
+                <label for="detectionSensitivity">Sensibilité:</label>
+                <input type="range" id="detectionSensitivity" min="1" max="10" value="5">
+                <span id="sensitivityValue">5</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="detectionInterval">Intervalle (ms):</label>
+                <input type="number" id="detectionInterval" min="100" max="5000" value="1000" step="100">
+            </div>
+            
+            <div class="control-group">
+                <button class="btn btn-info" onclick="debugInfo()">
+                    <i class="fas fa-bug"></i> Debug Info
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal d'ajout d'objet -->
+    <div id="addObjectModal" class="modal">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h3>Ajouter un Objet</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="addObjectForm">
+                    <div class="form-group">
+                        <label for="gId">G_ID:</label>
+                        <input type="text" id="gId" required placeholder="Ex: RED_CUSTOM_001">
+                        <small>Identifiant unique pour cet objet</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="objectType">Type d'objet:</label>
+                        <select id="objectType" required>
+                            <option value="">Sélectionner le type...</option>
+                            <option value="Carte microchip">Carte microchip</option>
+                            <option value="Carte personnalisée">Carte personnalisée</option>
+                            <option value="STM32">STM32</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="objectColor">Couleur:</label>
+                        <select id="objectColor" required>
+                            <option value="">Sélectionner la couleur...</option>
+                            <option value="red">Rouge</option>
+                            <option value="green">Vert</option>
+                            <option value="blue">Bleu</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                            Annuler
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Ajouter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
